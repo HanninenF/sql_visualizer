@@ -167,6 +167,7 @@
           <code class="t-flag">unique</code><div>UNIQUE constraint — this is how 1‑1 is made.</div>
           <code class="t-arrow">-&gt; Table</code><div>Foreign key to that table's primary key. The column inherits its type.</div>
           <code class="t-arrow">-&gt; T.Col</code><div>Foreign key to a specific (PK or unique) column.</div>
+          <code class="t-arrow">OwnerId</code><div>With <b>Implicit</b> on (canvas toolbar), a column named table + Id gets a dashed arrow to that table's PK, even without <b>-&gt;</b>. Diagram only: not a foreign key in the SQL.</div>
           <code class="t-type">vc</code><div>varchar(128). Other types as-is: int, text, date, datetime, decimal(8,2)…</div>
         </div>
         <div class="hsep"></div>
@@ -218,6 +219,11 @@
       <button id="layoutBtn" class="tool" title="Rearrange all tables">
         <svg width="14" height="14" class="ico thin" aria-hidden="true"><rect x="1.5" y="1.5" width="4.5" height="4.5" rx="1"/><rect x="8" y="1.5" width="4.5" height="4.5" rx="1"/><rect x="1.5" y="8" width="4.5" height="4.5" rx="1"/><rect x="8" y="8" width="4.5" height="4.5" rx="1"/></svg>
         Auto layout
+      </button>
+      <div class="vsep sm"></div>
+      <button id="implicitBtn" class="tool" aria-pressed="false" title="Also draw dashed arrows for columns named after a table + Id (OwnerId → Owner), without ->">
+        <svg width="14" height="14" class="ico thin" aria-hidden="true"><rect x="1" y="1.5" width="4" height="11" rx="1"/><circle cx="5" cy="9.5" r="1.2" fill="currentColor"/><path d="M6.5 9.5h2V4.5h1.3" stroke-dasharray="1.6 1.4"/><path d="M10.2 2.8 12.6 4.5l-2.4 1.7z" fill="currentColor"/></svg>
+        Implicit
       </button>
     </div>
 

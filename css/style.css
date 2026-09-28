@@ -427,6 +427,7 @@ main { flex: 1; display: flex; min-height: 0; }
   border: 0; border-radius: 7px; background: transparent; font-weight: 500;
 }
 .tool:hover { background: var(--hover); }
+.tool.on { background: var(--accent-soft); color: var(--accent); }
 .tool.icon { width: 30px; padding: 0; justify-content: center; }
 .zoom-label { min-width: 50px; justify-content: center; padding: 0; font: 12px var(--mono); color: var(--muted); }
 .zoom-label:hover { color: var(--fg); }

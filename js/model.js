@@ -115,7 +115,7 @@ function parseText(src) {
 // An FK column without a type gets the type of the column it points to
 function defaultType(c, seen = new Set()) {
   if (isIdName(c.name)) return 'int';
-  if (c.targetCol && !seen.has(c)) { seen.add(c); return effType(c.targetCol, seen); }
+  if (c.targetCol && !c.implicit && !seen.has(c)) { seen.add(c); return effType(c.targetCol, seen); }
   if (c.ref) return 'int';
   return 'vc';
 }
@@ -158,7 +158,21 @@ function typeProblem(type) {
   return `Unknown type ${orig}` + (guess ? `. Did you mean ${guess}?` : '');
 }
 
-function resolve(tables) {
+// With the "Implicit" toggle on, a column without "->" whose name is a table name + Id
+// ("OwnerId", "owner_id", "CategoryId" → Categories) gets a dashed arrow to that table's primary key.
+// It only affects the diagram: the text, the SQL and the column's type are left as they are.
+function implicitTarget(c, lower) {
+  const m = c.name.match(/^(.+?)(?:Id|ID|_id|_ID)$/);
+  if (!m) return null;
+  const s = m[1].toLowerCase();
+  for (const n of [s, s + 's', s + 'es', s.replace(/y$/, 'ies')]) {
+    const t = lower.get(n);
+    if (t && t.pkCols.length === 1 && t.pkCols[0] !== c) return t;
+  }
+  return null;
+}
+
+function resolve(tables, implicit = false) {
   const problems = [];
   const exact = new Map(tables.map(t => [t.name, t]));
   const lower = new Map(tables.map(t => [t.name.toLowerCase(), t]));
@@ -171,7 +185,12 @@ function resolve(tables) {
     if (!t.cols.length) problems.push(problem(t.line, `${t.name} has no columns`, 'warn'));
     for (const c of t.cols) {
       c.target = c.targetCol = c.refError = null;
-      if (!c.ref) continue;
+      c.implicit = false;
+      if (!c.ref) {
+        const tt = implicit && implicitTarget(c, lower);
+        if (tt) { c.target = tt; c.targetCol = tt.pkCols[0]; c.implicit = true; }
+        continue;
+      }
       const tt = exact.get(c.ref) || lower.get(c.ref.toLowerCase());
       if (!tt) c.refError = `No table named ${c.ref}`;
       else if (c.refCol) {

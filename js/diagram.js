@@ -31,7 +31,7 @@ function displayType(c) {
 
 function rowInfo(c) {
   return {
-    key: c.isPk ? 'PK' : c.ref ? 'FK' : '',
+    key: c.isPk ? 'PK' : c.ref || c.implicit ? 'FK' : '',
     name: c.name,
     bold: c.isPk,
     flags: [c.nullable && 'null', c.unique && 'unique'].filter(Boolean).join(' '),
@@ -357,6 +357,7 @@ text { dominant-baseline: central; }
 .type { font: ${FONTS.type}; fill: var(--muted, #5e5440); }
 .row.bad .name, .row.bad .key { fill: var(--err, #7a2e22); }
 .edge { fill: none; stroke: var(--edge, #5e5440); stroke-width: 1.4; stroke-linejoin: round; }
+.edge.implicit { stroke-dasharray: 5 4; }
 .ahead { fill: var(--edge, #5e5440); }
 .start { fill: var(--canvas, #fff); stroke: var(--edge, #5e5440); stroke-width: 1.5; }
 .edge-g.hl .edge { stroke: var(--accent, #3a4658); stroke-width: 2; }
@@ -396,6 +397,7 @@ function computeGeometry() {
         // a nullable FK means a row may have no parent
         unique: c.unique || (c.isPk && t.pkCols.length === 1),
         nullable: c.nullable,
+        implicit: c.implicit,
         from: t.name + '.' + c.name,
         to: c.target.name + '.' + c.targetCol.name,
         sy: a.y + rowY(i),
@@ -528,7 +530,7 @@ function endMarks(e) {
 function edgeMarkup(e, interactive) {
   let s = `<g class="edge-g" data-from="${esc(e.from)}" data-to="${esc(e.to)}" data-ft="${esc(e.fromTable)}" data-tt="${esc(e.toTable)}">`;
   if (interactive) s += `<path class="edge-hit" d="${e.d}"/>`;
-  s += `<path class="edge" d="${e.d}"/>` + endMarks(e) + '</g>';
+  s += `<path class="edge${e.implicit ? ' implicit' : ''}" d="${e.d}"/>` + endMarks(e) + '</g>';
   return s;
 }
 

@@ -159,7 +159,7 @@ ta.addEventListener('input', () => {
 //   sqlviz.docs       the tabs: { list: [{ id, name }], active }
 //   sqlviz.doc.<id>   one diagram: text, SQL, mode, box positions and the view (pan/zoom)
 // `state` holds the preferences plus the active diagram's fields; `pos` its box positions.
-const SETTINGS = ['style', 'colors', 'fontSize', 'wrap', 'notation', 'panel', 'leftW'];
+const SETTINGS = ['style', 'colors', 'fontSize', 'wrap', 'notation', 'implicit', 'panel', 'leftW'];
 // base: the text the diagram was created with (an example, or empty), to tell whether it has changed
 const DOC_DEFAULTS = { text: '', sql: '', mode: 'text', textStale: false, sqlStale: true, base: null };
 const docKey = id => 'doc.' + id;
@@ -183,7 +183,7 @@ if (!docs?.list?.length) {
 if (!docs.list.some(d => d.id === docs.active)) docs.active = docs.list[0].id;
 
 const state = Object.assign({
-  style: 'classic', colors: 'bleak', fontSize: 13, wrap: true, notation: 'arrows', panel: 'mid', leftW: null, ...DOC_DEFAULTS,
+  style: 'classic', colors: 'bleak', fontSize: 13, wrap: true, notation: 'arrows', implicit: false, panel: 'mid', leftW: null, ...DOC_DEFAULTS,
 }, store.get('settings', {}));
 let pos = {};
 let docView = null; // the active diagram's saved pan/zoom, if any
@@ -221,7 +221,7 @@ function saveState() {
 
 function parseCurrent() {
   const r = state.mode === 'text' ? parseText(ta.value) : parseSQL(ta.value);
-  r.problems.push(...resolve(r.tables));
+  r.problems.push(...resolve(r.tables, state.implicit));
   return r;
 }
 
@@ -370,6 +370,20 @@ $('#noteSwitch').onclick = () => { const n = pendingNotation; closeNote(); if (n
 $('#noteStay').onclick = closeNote;
 $('#notationNote').addEventListener('keydown', e => { if (e.key === 'Escape') closeNote(); });
 applyNotation();
+
+// Implicit arrows: XxxId columns without "->" point to table Xxx (dashed, diagram only)
+function applyImplicit() {
+  const b = $('#implicitBtn');
+  b.classList.toggle('on', state.implicit);
+  b.setAttribute('aria-pressed', String(state.implicit));
+}
+$('#implicitBtn').onclick = () => {
+  state.implicit = !state.implicit;
+  applyImplicit();
+  update();
+  saveState();
+};
+applyImplicit();
 
 // Menus: Export (app bar) and Text colours (editor header)
 const MENUS = [['#exportBtn', '#exportMenu'], ['#schemeBtn', '#schemeMenu']];
