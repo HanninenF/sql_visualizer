@@ -24,18 +24,6 @@
     <div class="title">SQL Visualizer</div>
   </div>
   <div class="spacer"></div>
-  <div class="seg icon-seg" id="panelSeg" role="group" aria-label="Editor width">
-    <button data-panel="collapsed" title="Hide the editor" aria-label="Hide the editor">
-      <svg width="16" height="16" class="ico thin" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/></svg>
-    </button>
-    <button data-panel="mid" title="Editor beside the diagram" aria-label="Editor beside the diagram">
-      <svg width="16" height="16" class="ico thin" aria-hidden="true"><rect class="fill" x="2" y="3" width="3.5" height="10" rx="1"/><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M5.5 2.5v11"/></svg>
-    </button>
-    <button data-panel="half" title="Editor at half the screen" aria-label="Editor at half the screen">
-      <svg width="16" height="16" class="ico thin" aria-hidden="true"><rect class="fill" x="2" y="3" width="6" height="10" rx="1"/><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M8 2.5v11"/></svg>
-    </button>
-  </div>
-  <div class="vsep"></div>
   <select id="notationSel" class="select" title="Relationship notation" aria-label="Relationship notation">
     <option value="arrows">Arrows (SQL)</option>
     <option value="crowsfoot">Crow's foot</option>
@@ -236,6 +224,18 @@
     </div>
 
     <div class="card card-tl">
+      <div class="seg icon-seg" id="panelSeg" role="group" aria-label="Editor width">
+        <button data-panel="collapsed" title="Hide the editor" aria-label="Hide the editor">
+          <svg width="16" height="16" class="ico thin" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/></svg>
+        </button>
+        <button data-panel="mid" title="Editor beside the diagram" aria-label="Editor beside the diagram">
+          <svg width="16" height="16" class="ico thin" aria-hidden="true"><rect class="fill" x="2" y="3" width="3.5" height="10" rx="1"/><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M5.5 2.5v11"/></svg>
+        </button>
+        <button data-panel="half" title="Editor at half the screen" aria-label="Editor at half the screen">
+          <svg width="16" height="16" class="ico thin" aria-hidden="true"><rect class="fill" x="2" y="3" width="6" height="10" rx="1"/><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M8 2.5v11"/></svg>
+        </button>
+      </div>
+      <div class="vsep sm"></div>
       <button id="newTableBtn" class="tool" title="New table (or double-click the canvas)">
         <svg width="14" height="14" class="ico" aria-hidden="true"><path d="M7 2v10M2 7h10"/></svg>
         New table
