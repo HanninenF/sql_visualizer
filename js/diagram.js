@@ -39,12 +39,20 @@ function rowInfo(c) {
   };
 }
 
+// The rows a box shows: every column, or with "Keys only" just the primary keys, the
+// foreign keys and the columns they point to
+const shownCols = t => t.shown ?? t.cols;
+function markShown(tables) {
+  const targeted = new Set(tables.flatMap(t => t.cols.map(c => c.targetCol).filter(Boolean)));
+  for (const t of tables) t.shown = state.keysOnly ? t.cols.filter(c => c.isPk || c.ref || c.target || targeted.has(c)) : t.cols;
+}
+
 function measureTable(t) {
-  const rows = t.cols.map(rowInfo);
+  const rows = shownCols(t).map(rowInfo);
   const w = Math.max(MIN_W, textW(t.name, FONTS.head) + 2 * PAD_X + 12, ...rows.map(r =>
     PAD_X + BADGE_W + GAP + textW(r.name, r.bold ? FONTS.pk : FONTS.name) + 16 +
     (r.flags ? textW(r.flags, FONTS.flags) + 6 : 0) + textW(r.type, FONTS.type) + PAD_X));
-  return { w: Math.ceil(w / 10) * 10, h: ROWS_TOP + Math.max(1, t.cols.length) * ROW_H + 6, rows };
+  return { w: Math.ceil(w / 10) * 10, h: ROWS_TOP + Math.max(1, rows.length) * ROW_H + 6, rows };
 }
 const rowY = i => ROWS_TOP + i * ROW_H + ROW_H / 2;
 
@@ -379,6 +387,7 @@ let geometry = { boxes: new Map(), edges: [] };
 
 function computeGeometry() {
   const tables = model.tables;
+  markShown(tables);
   const dims = new Map(tables.map(t => [t, measureTable(t)]));
   ensurePositions(tables, dims);
   const boxes = new Map(tables.map(t => {
@@ -387,7 +396,7 @@ function computeGeometry() {
   }));
   const edges = [];
   for (const t of tables) {
-    t.cols.forEach((c, i) => {
+    shownCols(t).forEach((c, i) => {
       if (!c.target) return;
       const a = boxes.get(t), b = boxes.get(c.target);
       edges.push({
@@ -401,7 +410,7 @@ function computeGeometry() {
         from: t.name + '.' + c.name,
         to: c.target.name + '.' + c.targetCol.name,
         sy: a.y + rowY(i),
-        ty: b.y + rowY(c.target.cols.indexOf(c.targetCol)),
+        ty: b.y + rowY(shownCols(c.target).indexOf(c.targetCol)),
       });
     });
   }
@@ -433,7 +442,7 @@ function boxMarkup(t, b, interactive) {
   s += `<path class="head" d="M0,${r}A${r},${r} 0 0 1 ${r},0H${w - r}A${r},${r} 0 0 1 ${w},${r}V${HEAD_H}H0Z"/>`;
   s += `<line class="sep" x1="0" y1="${HEAD_H + .5}" x2="${w}" y2="${HEAD_H + .5}"/>`;
   s += `<text class="title" x="${PAD_X}" y="${HEAD_H / 2}">${esc(t.name)}</text>`;
-  t.cols.forEach((c, i) => {
+  shownCols(t).forEach((c, i) => {
     const row = b.rows[i], y = rowY(i);
     const cls = 'row' + (c.isPk ? ' pk' : '') + (c.ref && !c.target ? ' bad' : '');
     s += `<g class="${cls}" data-key="${esc(t.name + '.' + c.name)}" data-line="${c.line}">`;

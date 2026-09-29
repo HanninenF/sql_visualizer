@@ -22,8 +22,8 @@ function canvasAspect() {
 function layoutEdges(tables) {
   const out = [];
   for (const t of tables) {
-    t.cols.forEach((c, i) => {
-      if (c.target && c.target !== t) out.push({ from: t, to: c.target, fy: rowY(i), ty: rowY(c.target.cols.indexOf(c.targetCol)) });
+    shownCols(t).forEach((c, i) => {
+      if (c.target && c.target !== t) out.push({ from: t, to: c.target, fy: rowY(i), ty: rowY(shownCols(c.target).indexOf(c.targetCol)) });
     });
   }
   return out;

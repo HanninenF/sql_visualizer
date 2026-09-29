@@ -159,7 +159,7 @@ ta.addEventListener('input', () => {
 //   sqlviz.docs       the tabs: { list: [{ id, name }], active }
 //   sqlviz.doc.<id>   one diagram: text, SQL, mode, box positions and the view (pan/zoom)
 // `state` holds the preferences plus the active diagram's fields; `pos` its box positions.
-const SETTINGS = ['style', 'colors', 'fontSize', 'wrap', 'notation', 'implicit', 'panel', 'leftW'];
+const SETTINGS = ['style', 'colors', 'fontSize', 'wrap', 'notation', 'implicit', 'keysOnly', 'panel', 'leftW'];
 // base: the text the diagram was created with (an example, or empty), to tell whether it has changed
 const DOC_DEFAULTS = { text: '', sql: '', mode: 'text', textStale: false, sqlStale: true, base: null };
 const docKey = id => 'doc.' + id;
@@ -183,7 +183,7 @@ if (!docs?.list?.length) {
 if (!docs.list.some(d => d.id === docs.active)) docs.active = docs.list[0].id;
 
 const state = Object.assign({
-  style: 'classic', colors: 'bleak', fontSize: 13, wrap: true, notation: 'arrows', implicit: false, panel: 'mid', leftW: null, ...DOC_DEFAULTS,
+  style: 'classic', colors: 'bleak', fontSize: 13, wrap: true, notation: 'arrows', implicit: false, keysOnly: false, panel: 'mid', leftW: null, ...DOC_DEFAULTS,
 }, store.get('settings', {}));
 let pos = {};
 let docView = null; // the active diagram's saved pan/zoom, if any
@@ -384,6 +384,21 @@ $('#implicitBtn').onclick = () => {
   saveState();
 };
 applyImplicit();
+
+// Keys only: boxes show just the key columns, so the joins in a big schema stand out
+function applyKeysOnly() {
+  const b = $('#keysBtn');
+  b.classList.toggle('on', state.keysOnly);
+  b.setAttribute('aria-pressed', String(state.keysOnly));
+}
+$('#keysBtn').onclick = () => {
+  state.keysOnly = !state.keysOnly;
+  applyKeysOnly();
+  drawDiagram();
+  if (boxesOverlap()) autoLayout(); // boxes placed while short may collide once they grow
+  saveState();
+};
+applyKeysOnly();
 
 // Menus: Export (app bar) and Text colours (editor header)
 const MENUS = [['#exportBtn', '#exportMenu'], ['#schemeBtn', '#schemeMenu']];
