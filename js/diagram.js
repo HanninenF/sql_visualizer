@@ -633,12 +633,12 @@ function diagramVisible() {
   return x0 >= 0 && y0 >= CARD_TOP - 20 && x0 + bb.w * view.s <= r.width && y0 + bb.h * view.s <= r.height - CARD_BOTTOM + 20;
 }
 
-function fit() {
+function fit(maxZoom = 1.25) {
   const r = svg.getBoundingClientRect();
   const bb = contentBounds(20);
   if (!r.width) return;
   if (!bb) { view.s = 1; view.tx = 40; view.ty = 80; applyView(); return; }
-  view.s = Math.max(ZOOM_MIN, Math.min(1.25, (r.width - 96) / bb.w, (r.height - CARD_TOP - CARD_BOTTOM - 30) / bb.h));
+  view.s = Math.max(ZOOM_MIN, Math.min(maxZoom, (r.width - 96) / bb.w, (r.height - CARD_TOP - CARD_BOTTOM - 30) / bb.h));
   view.tx = (r.width - bb.w * view.s) / 2 - bb.x * view.s;
   view.ty = CARD_TOP + (r.height - CARD_TOP - CARD_BOTTOM - bb.h * view.s) / 2 - bb.y * view.s;
   applyView();
@@ -705,7 +705,7 @@ const viewMiddle = () => { const r = svg.getBoundingClientRect(); return [r.widt
 $('#zoomIn').onclick = () => zoomTo(view.s * 1.2, ...viewMiddle());
 $('#zoomOut').onclick = () => zoomTo(view.s / 1.2, ...viewMiddle());
 $('#zoomLabel').onclick = () => zoomTo(1, ...viewMiddle());
-$('#fitBtn').onclick = fit;
+$('#fitBtn').onclick = () => fit(presentView ? 2 : undefined);
 // Rearrange every table (the Auto layout button, loading an example, repairing overlaps)
 function autoLayout() {
   histRecord('layout', () => arrangeAll(model.tables, geometry.dims));

@@ -528,6 +528,30 @@ split.addEventListener('pointerdown', e => {
   split.addEventListener('pointerup', up);
 });
 
+// Presentation mode: hide everything but the diagram, go full screen and zoom it up.
+// Leaving (the button, or Esc, which also ends full screen) puts the view back.
+let presentView = null;
+function setPresenting(on) {
+  if (on === !!presentView) return;
+  document.body.classList.toggle('presenting', on);
+  $('#presentBtn').classList.toggle('on', on);
+  $('#presentBtn span').textContent = on ? 'Exit' : 'Present';
+  if (on) {
+    presentView = { ...view };
+    document.documentElement.requestFullscreen?.().catch(() => {});
+    requestAnimationFrame(() => fit(2));
+  } else {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    Object.assign(view, presentView);
+    presentView = null;
+    applyView();
+  }
+}
+$('#presentBtn').onclick = () => setPresenting(!presentView);
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) setPresenting(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && presentView) setPresenting(false); });
+window.addEventListener('resize', () => { if (presentView) fit(2); });
+
 // ─── Start ───────────────────────────────────────────────────────────────────
 // Box widths are measured with the Geist fonts, so wait for them (at most 1.5s).
 
