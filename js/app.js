@@ -347,9 +347,13 @@ $('#helpClose').onclick = () => setHelp(false);
 let pendingNotation = null;
 function applyNotation() {
   if (!NOTATIONS[state.notation]) state.notation = 'arrows';
-  $('#notationSel').value = state.notation;
-  $('#notationSel').classList.toggle('er', state.notation !== 'arrows');
-  $('#notationSel').title = state.notation === 'arrows' ? 'Relationship notation' : 'An ER-style notation: see why arrows fit SQL tables better';
+  const b = $('#notationBtn');
+  $('#notationIco').innerHTML = notationIcon(state.notation);
+  b.classList.toggle('er', state.notation !== 'arrows');
+  b.title = state.notation === 'arrows' ? 'Relationship notation: Arrows (SQL)' : `Relationship notation: ${NOTATIONS[state.notation]} (an ER-style notation: see why arrows fit SQL tables better)`;
+  $('#notationList').innerHTML = Object.entries(NOTATIONS).map(([key, name]) =>
+    `<button role="menuitemradio" aria-checked="${key === state.notation}" data-notation="${key}">` +
+    `<span class="check">${key === state.notation ? '✓' : ''}</span>${notationIcon(key)}<span class="item-name">${name}</span></button>`).join('');
   if (model.tables?.length) drawDiagram();
 }
 function closeNote() {
@@ -361,12 +365,13 @@ function setNotation(n) {
   applyNotation();
   saveState();
 }
-$('#notationSel').addEventListener('change', e => {
-  const n = e.target.value;
+$('#notationList').addEventListener('click', e => {
+  const n = e.target.closest('[data-notation]')?.dataset.notation;
+  if (!n) return;
+  closeMenus();
   if (state.notation === 'arrows' && n !== 'arrows') {
     // stay on arrows until the user confirms; the same note for every ER-style notation
     pendingNotation = n;
-    e.target.value = 'arrows';
     $('#noteSwitch').textContent = `Switch to ${NOTATIONS[n]}`;
     $('#notationNote').hidden = false;
     $('#noteStay').focus();
@@ -433,7 +438,7 @@ $('#dataBtn').onclick = () => {
 applyDataView();
 
 // Menus: Export (app bar) and Text colours (editor header)
-const MENUS = [['#exportBtn', '#exportMenu'], ['#schemeBtn', '#schemeMenu'], ['#themeMenuBtn', '#themeMenu']];
+const MENUS = [['#exportBtn', '#exportMenu'], ['#schemeBtn', '#schemeMenu'], ['#themeMenuBtn', '#themeMenu'], ['#notationBtn', '#notationMenu']];
 function closeMenus() {
   for (const [btn, menu] of MENUS) {
     $(menu).hidden = true;

@@ -24,15 +24,17 @@
     <div class="title">SQL Visualizer</div>
   </div>
   <div class="spacer"></div>
-  <select id="notationSel" class="select" title="Relationship notation" aria-label="Relationship notation">
-    <option value="arrows">Arrows (SQL)</option>
-    <option value="crowsfoot">Crow's foot</option>
-    <option value="uml">UML</option>
-    <option value="ratio">1 : N</option>
-  </select>
   <div class="menu-wrap">
-    <button id="themeMenuBtn" class="icon-btn" title="Theme" aria-label="Theme" aria-haspopup="menu" aria-expanded="false">
-      <svg width="16" height="16" class="ico thin" aria-hidden="true"><path d="M8 1.8a6.2 6.2 0 1 0 0 12.4c1 0 1.5-.6 1.5-1.3 0-.9-.8-1.2-.8-2 0-.7.6-1.2 1.3-1.2h1.6a2.6 2.6 0 0 0 2.6-2.6C14.2 4.1 11.4 1.8 8 1.8z"/><circle cx="4.9" cy="7.2" r=".9"/><circle cx="7.1" cy="4.6" r=".9"/><circle cx="10.4" cy="5.1" r=".9"/></svg>
+    <button id="notationBtn" class="tool" title="Relationship notation" aria-haspopup="menu" aria-expanded="false"><span id="notationIco"></span><span class="lbl">Notation</span></button>
+    <div id="notationMenu" class="menu" role="menu" hidden>
+      <div class="menu-label">Relationship notation</div>
+      <div id="notationList"></div>
+    </div>
+  </div>
+  <div class="menu-wrap">
+    <button id="themeMenuBtn" class="tool" title="Theme" aria-haspopup="menu" aria-expanded="false">
+      <svg width="14" height="14" viewBox="0 0 16 16" class="ico thin" aria-hidden="true"><path d="M8 1.8a6.2 6.2 0 1 0 0 12.4c1 0 1.5-.6 1.5-1.3 0-.9-.8-1.2-.8-2 0-.7.6-1.2 1.3-1.2h1.6a2.6 2.6 0 0 0 2.6-2.6C14.2 4.1 11.4 1.8 8 1.8z"/><circle cx="4.9" cy="7.2" r=".9"/><circle cx="7.1" cy="4.6" r=".9"/><circle cx="10.4" cy="5.1" r=".9"/></svg>
+      <span class="lbl">Theme</span>
     </button>
     <div id="themeMenu" class="menu" role="menu" hidden>
       <div class="menu-label">Theme</div>
@@ -41,7 +43,7 @@
   </div>
   <button id="implicitBtn" class="tool" aria-pressed="false" title="Also draw arrows for columns named after a table + Id (OwnerId → Owner), without ->">
     <svg width="14" height="14" class="ico thin" aria-hidden="true"><rect x="1" y="1.5" width="4" height="11" rx="1"/><circle cx="5" cy="9.5" r="1.2" fill="currentColor"/><path d="M6.5 9.5h2V4.5h1.3"/><path d="M10.2 2.8 12.6 4.5l-2.4 1.7z" fill="currentColor"/></svg>
-    <span class="lbl">Implicit</span>
+    <span class="lbl">Implicit links</span>
   </button>
   <button id="keysBtn" class="tool" aria-pressed="false" title="Show only key columns: primary keys, foreign keys and the columns they point to">
     <svg width="14" height="14" class="ico thin" aria-hidden="true"><circle cx="4.5" cy="7" r="2.5"/><path d="M7 7h5.5M10.5 7v2M12.5 7v1.5"/></svg>

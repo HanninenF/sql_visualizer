@@ -218,10 +218,10 @@ body.panel-collapsed #left, body.panel-collapsed #split { display: none; }
 .menu .ext { font-family: var(--mono); font-size: 11px; color: var(--muted); }
 .menu-sep { height: 1px; background: var(--line); margin: 4px; }
 .menu-left { right: auto; left: 0; width: 220px; }
-#themeList { display: flex; flex-direction: column; gap: 1px; }
-#themeList button { justify-content: flex-start; gap: 8px; width: 100%; }
-#themeList .check { width: 12px; color: var(--accent); font-weight: 600; }
-#themeList .theme-name { flex: 1; }
+#themeList, #notationList { display: flex; flex-direction: column; gap: 1px; }
+#themeList button, #notationList button { justify-content: flex-start; gap: 8px; width: 100%; }
+#themeList .check, #notationList .check { width: 12px; color: var(--accent); font-weight: 600; }
+#themeList .theme-name, #notationList .item-name { flex: 1; }
 .swatches { display: flex; gap: 3px; }
 .swatches i { width: 10px; height: 10px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(128, 128, 128, .25); }
 .size-row { display: flex; align-items: center; gap: 4px; padding: 2px 5px 4px 9px; }
@@ -439,7 +439,11 @@ body.presenting .card-tl, body.presenting #storageNotice { display: none; }
 .tool.icon { width: 30px; padding: 0; justify-content: center; }
 .zoom-label { min-width: 50px; justify-content: center; padding: 0; font: 12px var(--mono); color: var(--muted); }
 .zoom-label:hover { color: var(--fg); }
-.select.er { color: var(--warn); }
+#notationBtn.er { color: var(--warn); }
+#notationIco { display: flex; }
+.notation-ico text { font: 600 9px var(--mono); fill: currentColor; stroke: none; }
+.notation-ico text.big { font-size: 12px; }
+.notation-ico text[text-anchor] { font-size: 8px; letter-spacing: -.04em; }
 
 /* the note explaining why ER notation doesn't fit SQL tables */
 .note {

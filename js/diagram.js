@@ -626,6 +626,14 @@ const NOTATIONS = {
   uml: 'UML',
   ratio: '1 : N',
 };
+// A small picture of each notation, for its button and menu
+const NOTATION_ICONS = {
+  arrows: '<path d="M1.5 8h12"/><path d="M10.5 5 13.5 8l-3 3"/>',
+  crowsfoot: '<path d="M1.5 8h13M4 5v6M10 8l4.5-4M10 8l4.5 4"/>',
+  uml: '<path d="M1.5 11.5h13"/><text x="1.5" y="8.5">1</text><text x="10" y="11" class="big">*</text>',
+  ratio: '<text x="8" y="11" text-anchor="middle">1:N</text>',
+};
+const notationIcon = n => `<svg width="16" height="16" class="ico thin notation-ico" aria-hidden="true">${NOTATION_ICONS[n]}</svg>`;
 
 // Crow's foot symbols at an end: x,y on the box edge, d = direction away from the box,
 // h = half height (smaller when several arrows end on the same row)
