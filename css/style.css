@@ -199,6 +199,9 @@ body.panel-collapsed #left, body.panel-collapsed #split { display: none; }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .logo { width: 32px; height: 32px; flex: none; display: block; }
 .title { font-weight: 600; font-size: 14.5px; letter-spacing: -.01em; white-space: nowrap; }
+/* narrow screens: drop the name, then the toolbar labels (the buttons keep their tooltips) */
+@media (max-width: 1100px) { .brand .title { display: none; } }
+@media (max-width: 760px) { .appbar .tool .lbl { display: none; } .appbar .tool { padding: 0 8px; } }
 
 .menu-wrap { position: relative; }
 .menu {
@@ -429,7 +432,7 @@ body.presenting .appbar, body.presenting .tabbar, body.presenting #left, body.pr
 body.presenting .card-tl, body.presenting #storageNotice { display: none; }
 .tool {
   height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 11px 0 9px;
-  border: 0; border-radius: 7px; background: transparent; font-weight: 500;
+  border: 0; border-radius: 7px; background: transparent; font-weight: 500; white-space: nowrap;
 }
 .tool:hover { background: var(--hover); }
 .tool.on { background: var(--accent-soft); color: var(--accent); }
@@ -465,6 +468,12 @@ body.presenting .card-tl, body.presenting #storageNotice { display: none; }
 }
 .empty-title { font-weight: 600; color: var(--fg); font-size: 14px; }
 .empty b { font-weight: 600; }
+.empty .examples { margin-top: 10px; max-width: 420px; line-height: 1.8; }
+.empty .examples button {
+  pointer-events: auto; border: 0; background: none; padding: 0; font: inherit;
+  color: var(--accent); cursor: pointer;
+}
+.empty .examples button:hover { text-decoration: underline; }
 
 #toast {
   position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 8;

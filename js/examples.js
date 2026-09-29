@@ -3,7 +3,7 @@
 // ─── Examples ────────────────────────────────────────────────────────────────
 
 const EXAMPLES = {
-  school: `# School database
+  school: `# SchoolDatabase
 Student
   Id
   Name vc(100)
@@ -29,37 +29,12 @@ Enrollment
   EnrollmentDate date
   Grade int  # 0 = IG, 1 = G, 2 = VG
 `,
-  tour: `# Tables: a name without indentation
-# Columns: indented, like
-#   Name type flags -> Table
-# No type means vc (varchar(128)).
-# Id is int and the primary key.
-
-Author
-  Id
-  Name
-  Email vc unique
-  Bio text null
-
-Book
-  Id
-  Title vc(200)
-  Price decimal(8,2)
-  AuthorId -> Author
-  SequelToId null -> Book
-
-# No Id means no primary key,
-# unless you write pk
-BookTag
-  BookId pk -> Book
-  Tag vc(32) pk
-`,
-  dogs: `# Hundutställningen
+  dogs: `# DogExhibition
 Owner
   Id
   Name
 
-Race
+Breed
   Id
   Name
 
@@ -68,34 +43,10 @@ Dog
   Name
   Age int
   OwnerId -> Owner
-  RaceId -> Race
+  BreedId -> Breed
   Points decimal(3,1)
 `,
-  housing: `# Hyresvärdarna (housingdb)
-Tennant
-  Id
-  Name
-  PersonalNr vc(10)
-  ApartmentId -> Apartment
-
-Apartment
-  Id
-  NrRooms int
-  HouseId -> House
-
-House
-  Id
-  Address vc(256)
-
-JanitorToHouse
-  JanitorId -> Janitor
-  HouseId -> House
-
-Janitor
-  Id
-  Name
-`,
-  projects: `# Projektdatabasen (projectplanner)
+  projects: `# ProjectDatabase
 Project
   Id
   Name
@@ -119,7 +70,7 @@ Employee
   Name
   Email
 `,
-  store: `# Klädaffären (dbstore)
+  store: `# ClothingShop
 ReturnStatus
   Id
   Name

@@ -35,26 +35,16 @@
   </button>
   <button id="implicitBtn" class="tool" aria-pressed="false" title="Also draw arrows for columns named after a table + Id (OwnerId → Owner), without ->">
     <svg width="14" height="14" class="ico thin" aria-hidden="true"><rect x="1" y="1.5" width="4" height="11" rx="1"/><circle cx="5" cy="9.5" r="1.2" fill="currentColor"/><path d="M6.5 9.5h2V4.5h1.3"/><path d="M10.2 2.8 12.6 4.5l-2.4 1.7z" fill="currentColor"/></svg>
-    Implicit
+    <span class="lbl">Implicit</span>
   </button>
   <button id="keysBtn" class="tool" aria-pressed="false" title="Show only key columns: primary keys, foreign keys and the columns they point to">
     <svg width="14" height="14" class="ico thin" aria-hidden="true"><circle cx="4.5" cy="7" r="2.5"/><path d="M7 7h5.5M10.5 7v2M12.5 7v1.5"/></svg>
-    Keys only
+    <span class="lbl">Keys only</span>
   </button>
   <button id="dataBtn" class="tool" aria-pressed="false" title="Data view: every table shows a few made-up rows, with an arrow from each foreign key value to the row it points to">
     <svg width="14" height="14" class="ico thin" aria-hidden="true"><rect x="1.5" y="2" width="11" height="10" rx="1.5"/><path d="M1.5 5.5h11M1.5 8.8h11M5.5 5.5V12"/></svg>
-    Data
+    <span class="lbl">Data</span>
   </button>
-  <div class="vsep"></div>
-  <select id="examples" class="select" title="Load an example">
-    <option value="" selected disabled>Open example…</option>
-    <option value="school">School database</option>
-    <option value="tour">Syntax tour</option>
-    <option value="dogs">Hundutställningen</option>
-    <option value="housing">Hyresvärdarna</option>
-    <option value="projects">Projektdatabasen</option>
-    <option value="store">Klädaffären</option>
-  </select>
   <div class="menu-wrap">
     <button id="exportBtn" class="btn-primary" aria-haspopup="menu" aria-expanded="false">
       <svg width="16" height="16" class="ico" aria-hidden="true"><path d="M8 2.5v7.5M4.5 6.5 8 10l3.5-3.5M3 13.5h10"/></svg>
@@ -221,6 +211,12 @@
     <div id="emptyState" class="empty" hidden>
       <div class="empty-title">No tables yet</div>
       <div>Type a table name in the editor, or use <b>New table</b>.</div>
+      <div class="examples">Or open an example:
+        <button data-example="school">SchoolDatabase</button> ·
+        <button data-example="dogs">DogExhibition</button> ·
+        <button data-example="projects">ProjectDatabase</button> ·
+        <button data-example="store">ClothingShop</button>
+      </div>
     </div>
 
     <div class="card card-tl">

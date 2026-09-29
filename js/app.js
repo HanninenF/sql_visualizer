@@ -320,11 +320,11 @@ function toast(msg, actLabel, act) {
   toastTimer = setTimeout(() => { $('#toast').hidden = true; }, 5000);
 }
 
-$('#examples').addEventListener('change', e => {
-  const key = e.target.value, label = e.target.selectedOptions[0].textContent;
-  e.target.selectedIndex = 0;
+// The examples are listed in the empty diagram's message
+$('#emptyState .examples').addEventListener('click', e => {
+  const b = e.target.closest('button[data-example]');
   // an example opens in a new tab (with a fresh auto layout), so no work is overwritten
-  newDoc(label, EXAMPLES[key]);
+  if (b) newDoc(b.textContent, EXAMPLES[b.dataset.example]);
 });
 
 // The syntax reference is a third view of the editor area, beside Simple and SQL:
