@@ -58,7 +58,7 @@ function switchDoc(id) {
   hist.undo = h?.undo ?? [];
   hist.redo = h?.redo ?? [];
   readDoc(id);
-  prevNames = [];
+  prevNames = null;
   setHelp(false);
   loadEditor();
   if (docView) { Object.assign(view, docView); applyView(); } else fit();

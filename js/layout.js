@@ -129,47 +129,245 @@ function bestSpot(t, placed, dims, edges, anchor = null, current = null) {
   return best;
 }
 
-// Arrange every table: most connected first, then whatever is most connected to the placed ones.
-// Afterwards, each table in turn is lifted out and put back at its best spot, a few rounds.
+// ─── Auto layout: tables in columns by FK direction ─────────────────────────
+// Referenced tables go right, the tables pointing to them to the left, so arrows run
+// sideways between neighbouring columns (a junction table sits between its two tables).
+// Within a column tables are ordered like their neighbours (fewer crossings) and moved
+// up or down so an FK row lines up with its PK row (straight arrows). Gaps grow with the
+// number of arrows passing through. Finally neighbouring tables in a column are swapped
+// while that gives fewer jumps in the arrows as actually drawn.
+const AUTO = { COL_GAP: 90, ROW_GAP: 50, LANE: 16, COMP_GAP: 120, POLISH_MS: 400 };
+
 function arrangeAll(tables, dims) {
   if (!tables.length) return;
   const edges = layoutEdges(tables);
-  const degree = new Map(tables.map(t => [t, 0]));
-  for (const e of edges) { degree.set(e.from, degree.get(e.from) + 1); degree.set(e.to, degree.get(e.to) + 1); }
-
   const old = tables.map(t => pos[t.name]).filter(Boolean);
-  const origin = old.length ? { x: Math.min(...old.map(p => p.x)), y: Math.min(...old.map(p => p.y)) } : { x: 40, y: 40 };
 
-  const placed = new Map(), order = [], left = new Set(tables);
-  while (left.size) {
-    let pick = null, score = -1;
-    for (const t of left) {
-      const links = edges.filter(e => (e.from === t && placed.has(e.to)) || (e.to === t && placed.has(e.from))).length;
-      const s = links * 1000 + degree.get(t);
-      if (s > score) { pick = t; score = s; }
+  // connected groups of tables, each laid out on its own; single tables go in a row below
+  const nbrs = new Map(tables.map(t => [t, new Set()]));
+  for (const e of edges) { nbrs.get(e.from).add(e.to); nbrs.get(e.to).add(e.from); }
+  const seen = new Set(), groups = [];
+  for (const t of tables) {
+    if (seen.has(t)) continue;
+    const g = [], queue = [t];
+    seen.add(t);
+    while (queue.length) {
+      const u = queue.shift();
+      g.push(u);
+      for (const v of nbrs.get(u)) if (!seen.has(v)) { seen.add(v); queue.push(v); }
     }
-    left.delete(pick);
-    order.push(pick);
-    const s = bestSpot(pick, placed, dims, edges);
-    placed.set(pick, { x: s.x, y: s.y, ...dims.get(pick) });
+    groups.push(g);
+  }
+  const deadline = performance.now() + AUTO.POLISH_MS;
+  const blocks = groups.filter(g => g.length > 1).sort((a, b) => b.length - a.length)
+    .map(g => layoutGroup(g, dims, edges.filter(e => g.includes(e.from)), deadline));
+  const singles = groups.filter(g => g.length === 1).map(g => g[0]);
+
+  // blocks side by side, single tables in rows underneath
+  const placed = new Map();
+  let x = 0, bottom = 0;
+  for (const b of blocks) {
+    for (const [t, r] of b.placed) placed.set(t, { ...r, x: r.x + x });
+    x += b.w + AUTO.COMP_GAP;
+    bottom = Math.max(bottom, b.h);
+  }
+  const rowW = Math.max(x - AUTO.COMP_GAP, 900);
+  let sx = 0, sy = blocks.length ? bottom + AUTO.COMP_GAP : 0, rowH = 0;
+  for (const t of singles) {
+    const { w, h } = dims.get(t);
+    if (sx && sx + w > rowW) { sx = 0; sy += rowH + AUTO.ROW_GAP; rowH = 0; }
+    placed.set(t, { x: sx, y: sy, w, h });
+    sx += w + AUTO.COL_GAP;
+    rowH = Math.max(rowH, h);
   }
 
-  for (let round = 0; round < 3; round++) {
+  // keep the diagram where it was on the canvas; a brand new one goes in the middle of the view
+  const bb = bboxOf([...placed.values()]), mid = viewCenter();
+  const origin = old.length ? { x: Math.min(...old.map(p => p.x)), y: Math.min(...old.map(p => p.y)) }
+    : mid ? { x: mid.x - bb.w / 2, y: mid.y - bb.h / 2 } : { x: 40, y: 40 };
+  const dx = snap(origin.x - bb.x), dy = snap(origin.y - bb.y);
+  for (const [t, r] of placed) pos[t.name] = { x: snap(r.x) + dx, y: snap(r.y) + dy };
+}
+
+// Lay out one connected group. Returns { placed: Map table → rect, w, h }.
+function layoutGroup(nodes, dims, edges, deadline) {
+  // parents: the tables t points to. Cycles (A → B → A) are broken for the column choice.
+  const parents = new Map(nodes.map(t => [t, new Set()])), children = new Map(nodes.map(t => [t, new Set()]));
+  const mark = new Map();
+  const visit = t => {
+    mark.set(t, 1);
+    for (const e of edges) {
+      if (e.from !== t || e.to === t) continue;
+      if (mark.get(e.to) === 1) continue; // back edge: ignored for the columns
+      parents.get(t).add(e.to);
+      children.get(e.to).add(t);
+      if (!mark.has(e.to)) visit(e.to);
+    }
+    mark.set(t, 2);
+  };
+  for (const t of nodes) if (!mark.has(t)) visit(t);
+
+  // layer 0: tables that point nowhere; a table is one layer past its furthest parent
+  const layer = new Map();
+  const layerOf = t => {
+    if (!layer.has(t)) layer.set(t, Math.max(-1, ...[...parents.get(t)].map(layerOf)) + 1);
+    return layer.get(t);
+  };
+  nodes.forEach(layerOf);
+  // a table with more children than parents moves next to its children (shorter arrows)
+  for (let round = 0; round < nodes.length; round++) {
     let moved = false;
-    for (const t of order) {
-      const cur = placed.get(t);
-      placed.delete(t);
-      const s = bestSpot(t, placed, dims, edges, null, cur);
-      placed.set(t, { x: s.x, y: s.y, ...dims.get(t) });
-      if (s.x !== cur.x || s.y !== cur.y) moved = true;
+    for (const t of nodes) {
+      const ch = [...children.get(t)];
+      if (!ch.length || ch.length <= parents.get(t).size) continue;
+      const to = Math.min(...ch.map(c => layer.get(c))) - 1;
+      if (to > layer.get(t)) { layer.set(t, to); moved = true; }
     }
     if (!moved) break;
   }
+  const maxLayer = Math.max(...layer.values());
+  const cols = Array.from({ length: maxLayer + 1 }, () => []);
+  for (const t of nodes) cols[maxLayer - layer.get(t)].push(t); // referenced tables on the right
+  const colOf = t => maxLayer - layer.get(t);
 
-  // keep the diagram where it was on the canvas
+  // order within columns: barycenter sweeps, keeping the order with the fewest crossings
+  const links = new Map(nodes.map(t => [t, []]));
+  for (const e of edges) if (e.from !== e.to) { links.get(e.from).push(e.to); links.get(e.to).push(e.from); }
+  const crossings = () => {
+    const idx = new Map(cols.flatMap(c => c.map((t, i) => [t, i])));
+    let n = 0;
+    for (let c = 0; c + 1 < cols.length; c++) {
+      const es = edges.filter(e => Math.min(colOf(e.from), colOf(e.to)) === c && Math.abs(colOf(e.from) - colOf(e.to)) === 1)
+        .map(e => colOf(e.from) === c ? [idx.get(e.from) * 1e4 + e.fy, idx.get(e.to) * 1e4 + e.ty] : [idx.get(e.to) * 1e4 + e.ty, idx.get(e.from) * 1e4 + e.fy]);
+      for (let i = 0; i < es.length; i++) for (let j = i + 1; j < es.length; j++) {
+        if ((es[i][0] - es[j][0]) * (es[i][1] - es[j][1]) < 0) n++;
+      }
+    }
+    return n;
+  };
+  let best = cols.map(c => [...c]), bestN = crossings();
+  for (let it = 0; it < 12 && bestN > 0; it++) {
+    const order = it % 2 ? [...cols.keys()].reverse() : [...cols.keys()];
+    for (const c of order) {
+      const frac = new Map(cols.flatMap(col => col.map((t, i) => [t, (i + .5) / col.length])));
+      const bary = t => {
+        const ns = links.get(t).filter(u => colOf(u) !== c);
+        return ns.length ? ns.reduce((sum, u) => sum + frac.get(u), 0) / ns.length : frac.get(t);
+      };
+      const b = new Map(cols[c].map(t => [t, bary(t)]));
+      cols[c].sort((p, q) => b.get(p) - b.get(q));
+    }
+    const n = crossings();
+    if (n < bestN) { bestN = n; best = cols.map(col => [...col]); }
+  }
+  best.forEach((col, i) => { cols[i] = col; });
+
+  const place = () => placeColumns(cols, colOf, dims, edges);
+  let placed = place();
+  // polish: swap neighbours in a column while the drawn arrows get fewer jumps
+  if (!state.dataView) {
+    let cost = drawnCost(nodes, placed);
+    for (let round = 0; round < 3 && performance.now() < deadline; round++) {
+      let better = false;
+      for (const col of cols) {
+        for (let i = 0; i + 1 < col.length && performance.now() < deadline; i++) {
+          [col[i], col[i + 1]] = [col[i + 1], col[i]];
+          const p = place(), c = drawnCost(nodes, p);
+          if (c < cost) { cost = c; placed = p; better = true; }
+          else [col[i], col[i + 1]] = [col[i + 1], col[i]];
+        }
+      }
+      if (!better) break;
+    }
+  }
   const bb = bboxOf([...placed.values()]);
-  const dx = snap(origin.x - bb.x), dy = snap(origin.y - bb.y);
-  for (const [t, r] of placed) pos[t.name] = { x: r.x + dx, y: r.y + dy };
+  for (const r of placed.values()) { r.x -= bb.x; r.y -= bb.y; }
+  return { placed, w: bb.w, h: bb.h };
+}
+
+// x from the columns (gaps widen with the arrows passing through), y so FK rows line up
+// with the rows they point to, keeping each column's order and spacing
+function placeColumns(cols, colOf, dims, edges) {
+  const through = cols.map(() => 0);
+  for (const e of edges) {
+    const a = colOf(e.from), b = colOf(e.to);
+    for (let c = Math.min(a, b); c < Math.max(a, b); c++) through[c]++;
+  }
+  const xs = [];
+  let x = 0;
+  cols.forEach((col, c) => {
+    xs[c] = x;
+    x += Math.max(0, ...col.map(t => dims.get(t).w)) + AUTO.COL_GAP + AUTO.LANE * through[c];
+  });
+  const y = new Map();
+  for (const col of cols) {
+    let top = 0;
+    for (const t of col) { y.set(t, top); top += dims.get(t).h + AUTO.ROW_GAP; }
+  }
+  // relax: each table moves toward where its arrows would be level
+  const off = new Map(); // table → [{ other, dy }] with dy = the y difference that makes an arrow level
+  for (const t of y.keys()) off.set(t, []);
+  for (const e of edges) {
+    if (e.from === e.to) continue;
+    off.get(e.from).push({ other: e.to, dy: e.ty - e.fy });
+    off.get(e.to).push({ other: e.from, dy: e.fy - e.ty });
+  }
+  for (let it = 0; it < 16; it++) {
+    const order = it % 2 ? [...cols].reverse() : cols;
+    for (const col of order) {
+      const want = col.map(t => {
+        const o = off.get(t);
+        return o.length ? o.reduce((sum, { other, dy }) => sum + y.get(other) + dy, 0) / o.length : y.get(t);
+      });
+      // keep the order and gaps, then shift the column to be as close to what it wants as it can
+      const got = [];
+      col.forEach((t, i) => { got[i] = i ? Math.max(want[i], got[i - 1] + dims.get(col[i - 1]).h + AUTO.ROW_GAP) : want[i]; });
+      const shift = got.reduce((sum, g, i) => sum + want[i] - g, 0) / col.length;
+      col.forEach((t, i) => y.set(t, got[i] + Math.min(0, shift)));
+    }
+  }
+  // last pass, right to left: line each table's first arrow up exactly with a table already
+  // placed to its right (so that arrow is straight), as far as the column's spacing allows
+  const done = new Set();
+  for (let c = cols.length - 1; c >= 0; c--) {
+    const col = cols[c];
+    const want = col.map(t => {
+      const o = off.get(t).find(({ other }) => done.has(other));
+      return o ? y.get(o.other) + o.dy : snap(y.get(t));
+    });
+    col.forEach((t, i) => {
+      const min = i ? y.get(col[i - 1]) + dims.get(col[i - 1]).h + AUTO.ROW_GAP : -Infinity;
+      y.set(t, Math.max(want[i], snap(min + 9)));
+    });
+    col.forEach(t => done.add(t));
+  }
+  // and left to right: a table none of whose arrows is straight moves to make one straight,
+  // if that fits between its neighbours in the column
+  const level = t => off.get(t).some(({ other, dy }) => y.get(t) === y.get(other) + dy);
+  cols.forEach(col => col.forEach((t, i) => {
+    if (!off.get(t).length || level(t)) return;
+    const lo = i ? y.get(col[i - 1]) + dims.get(col[i - 1]).h + AUTO.ROW_GAP : -Infinity;
+    const hi = i + 1 < col.length ? y.get(col[i + 1]) - AUTO.ROW_GAP - dims.get(t).h : Infinity;
+    const fit = off.get(t).map(({ other, dy }) => y.get(other) + dy).find(v => v >= lo && v <= hi);
+    if (fit !== undefined) y.set(t, fit);
+  }));
+  const placed = new Map();
+  cols.forEach((col, c) => col.forEach(t => placed.set(t, { x: xs[c], y: y.get(t), ...dims.get(t) })));
+  return placed;
+}
+
+// How the arrows come out when actually routed: jumps count most, then total length
+function drawnCost(nodes, placed) {
+  const boxes = new Map(nodes.map(t => [t, { ...placed.get(t), rows: [] }]));
+  const edges = diagramEdges(nodes, boxes);
+  if (!edges.length) return 0;
+  routeEdges(edges, [...boxes.values()]);
+  let cost = 0;
+  for (const e of edges) {
+    cost += (e.jumps ?? 0) * 1000;
+    for (let i = 1; i < e.points.length; i++) cost += Math.abs(e.points[i][0] - e.points[i - 1][0]) + Math.abs(e.points[i][1] - e.points[i - 1][1]);
+  }
+  return cost;
 }
 
 // Which tables t is connected to; when this changes, a floating table is placed again

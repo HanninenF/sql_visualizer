@@ -113,16 +113,32 @@ const rowY = i => ROWS_TOP + i * ROW_H + ROW_H / 2;
 // it moves to a better spot whenever its arrows change (e.g. while its FKs are being typed).
 let revealName = null;
 
+// Is a box (at least its middle) inside the visible canvas?
+function onScreen(p, d) {
+  const r = svg.getBoundingClientRect();
+  if (!r.width) return true;
+  const x = (p.x + d.w / 2) * view.s + view.tx, y = (p.y + d.h / 2) * view.s + view.ty;
+  return x >= 0 && x <= r.width && y >= 0 && y <= r.height;
+}
+
 function ensurePositions(tables, dims) {
   const names = new Set(tables.map(t => t.name));
   let changed = false;
+  // A table that just appeared may have an old spot from an earlier table with the same
+  // name. If that spot is off screen, forget it, so the table is placed where you look.
+  // (prevNames is null right after loading or switching tabs: then every spot is kept.)
+  if (prevNames) {
+    const before = new Set(prevNames);
+    for (const t of tables) if (!before.has(t.name) && pos[t.name] && !onScreen(pos[t.name], dims.get(t))) delete pos[t.name];
+  }
   if (tables.length && !tables.some(t => pos[t.name])) {
     arrangeAll(tables, dims);
+    revealName = tables[0].name; // placed mid-view, but make sure it shows
     changed = true;
   } else {
     // a renamed table keeps the spot of the name it replaced
     tables.forEach((t, i) => {
-      const old = prevNames[i];
+      const old = prevNames?.[i];
       if (!pos[t.name] && old && !names.has(old) && pos[old]) { pos[t.name] = pos[old]; changed = true; }
     });
     const edges = layoutEdges(tables);
@@ -338,6 +354,7 @@ function addJumps(edges) {
         .filter((x, j, arr) => !j || Math.abs(x - arr[j - 1]) > 2 * JUMP_R + 2); // no overlapping jumps
       jumps.push(xs);
     }
+    e.jumps = jumps.reduce((n, xs) => n + xs.length, 0);
     e.d = pathD(p, jumps);
   });
 }
@@ -458,8 +475,16 @@ function computeGeometry() {
     const d = dims.get(t);
     return [t, { x: pos[t.name].x, y: pos[t.name].y, w: d.w, h: d.h, rows: d.rows, data: d.data }];
   }));
+  const edges = state.dataView ? [] : diagramEdges(tables, boxes);
+  routeEdges(edges, [...boxes.values()]);
+  if ((state.notation === 'uml' || state.notation === 'ratio') && !state.dataView) placeLabels(edges);
+  geometry = { boxes, edges, dims };
+}
+
+// The arrows between boxes (Map table → box), before routing
+function diagramEdges(tables, boxes) {
   const edges = [];
-  if (!state.dataView) for (const t of tables) {
+  for (const t of tables) {
     shownCols(t).forEach((c, i) => {
       if (!c.target) return;
       const a = boxes.get(t), b = boxes.get(c.target);
@@ -480,7 +505,7 @@ function computeGeometry() {
   }
   // In the ER notations each arrow's "one" end has its own symbol, so arrows that point
   // at the same row are spread a little apart instead of meeting in one point
-  if (state.notation !== 'arrows' && !state.dataView) {
+  if (state.notation !== 'arrows') {
     const byTarget = new Map();
     for (const e of edges) (byTarget.get(e.to) ?? byTarget.set(e.to, []).get(e.to)).push(e);
     for (const group of byTarget.values()) {
@@ -494,9 +519,7 @@ function computeGeometry() {
       });
     }
   }
-  routeEdges(edges, [...boxes.values()]);
-  if ((state.notation === 'uml' || state.notation === 'ratio') && !state.dataView) placeLabels(edges);
-  geometry = { boxes, edges, dims };
+  return edges;
 }
 
 function dataBoxBody(t, b, interactive) {

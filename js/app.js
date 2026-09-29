@@ -146,10 +146,12 @@ ta.addEventListener('keydown', e => {
   }
 });
 ta.addEventListener('scroll', syncScroll);
-// A paste that replaces everything (all selected, or the editor empty) is a new schema:
-// lay it out from scratch instead of keeping the old positions
+// A paste that replaces everything (all selected, or the editor empty; blank lines
+// left outside the selection don't count) is a new schema: lay it out from scratch
 let pastedAll = false;
-ta.addEventListener('paste', () => { pastedAll = ta.selectionStart === 0 && ta.selectionEnd === ta.value.length; });
+ta.addEventListener('paste', () => {
+  pastedAll = !ta.value.slice(0, ta.selectionStart).trim() && !ta.value.slice(ta.selectionEnd).trim();
+});
 ta.addEventListener('input', () => {
   histTyping();
   if (state.mode === 'text') { state.text = ta.value; state.sqlStale = true; }
@@ -195,7 +197,7 @@ const state = Object.assign({
 let pos = {};
 let docView = null; // the active diagram's saved pan/zoom, if any
 let model = { tables: [] };
-let prevNames = [];
+let prevNames = null; // table names at the last draw (null: just loaded)
 
 function readDoc(id) {
   const d = store.get(docKey(id), {});
