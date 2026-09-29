@@ -39,7 +39,11 @@ function sqlType(t) {
 // model: { tables: [{ name, line, cols: [{ name, type, pk, nullable, unique, ref, refCol, line }] }] }
 // ref/refCol: "-> Table" (its primary key, refCol null) or "-> Table.Column"
 
-const FLAG = /^\(?(pk|null|unique)\)?$/i;
+const FLAG = /^\(?(pk|null|unique|index)\)?$/i;
+// An index over one or more columns, on its own line in a table: "index (A, B)" or "index name (A, B)"
+const INDEX_LINE = /^\s+index\b\s*([\p{L}_][\p{L}\p{N}_$]*)?\s*\(([^)]*)\)?\s*$/iu;
+// The name an index gets in the SQL when none was given
+const indexName = (table, cols) => `idx_${table}_${cols.join('_')}`;
 
 function parseText(src) {
   const tables = [], problems = [];
@@ -53,21 +57,31 @@ function parseText(src) {
       const name = code.trim().replace(/:$/, '');
       if (!IDENT.test(name)) {
         problems.push(problem(line, `"${name}" is not a valid table name`));
-        cur = { name, cols: [] }; // swallow its columns silently
+        cur = { name, cols: [], indexes: [] }; // swallow its columns silently
         return;
       }
       if (tables.some(t => t.name.toLowerCase() === name.toLowerCase())) {
         problems.push(problem(line, `Table ${name} is defined twice`));
-        cur = { name, cols: [] };
+        cur = { name, cols: [], indexes: [] };
         return;
       }
-      cur = { name, line, cols: [] };
+      cur = { name, line, cols: [], indexes: [] };
       tables.push(cur);
       return;
     }
 
     if (!cur) {
       problems.push(problem(line, 'Column outside a table. Write a table name (without indentation) first.'));
+      return;
+    }
+
+    const im = code.match(INDEX_LINE);
+    if (im) {
+      const cols = (im[2] ?? '').split(',').map(s => s.trim()).filter(Boolean);
+      if (!/\)\s*$/.test(code)) problems.push(problem(line, 'Missing ) after the index columns'));
+      else if (!cols.length) problems.push(problem(line, 'An index needs at least one column: index (A, B)'));
+      else if (cols.some(n => !IDENT.test(n))) problems.push(problem(line, `"${cols.find(n => !IDENT.test(n))}" is not a valid column name`));
+      else cur.indexes.push({ name: im[1] ?? null, cols, line });
       return;
     }
 
@@ -102,6 +116,7 @@ function parseText(src) {
       if (!f) typeParts.push(t);
       else if (f[1].toLowerCase() === 'pk') col.pk = true;
       else if (f[1].toLowerCase() === 'null') col.nullable = true;
+      else if (f[1].toLowerCase() === 'index') cur.indexes.push({ name: null, cols: [name], line });
       else col.unique = true;
     }
     col.type = typeParts.join(' ') || null;
@@ -130,7 +145,7 @@ double real bit bool boolean serial char varchar binary varbinary tinytext text 
 blob mediumblob longblob enum set date datetime timestamp time year json uuid inet4 inet6 geometry point
 linestring polygon`.split(/\s+/));
 const TYPE_MODIFIERS = new Set(['unsigned', 'signed', 'zerofill', 'precision']);
-const FLAG_WORDS = ['pk', 'null', 'unique'];
+const FLAG_WORDS = ['pk', 'null', 'unique', 'index'];
 
 // Levenshtein distance, for "did you mean …?"
 function editDistance(a, b) {
@@ -220,8 +235,22 @@ function resolve(tables, implicit = false) {
         if (bad) problems.push(problem(c.line, bad));
       }
       c.isPk = t.pkCols.includes(c);
+      c.indexed = false;
       c.autoInc = c.isPk && t.pkCols.length === 1 && isIdName(c.name) && INT_TYPES.has(c.effType.split(/[ (]/)[0]);
       if (c.isPk && c.nullable) problems.push(problem(c.line, `${c.name} is a primary key and can't be null`));
+    }
+  }
+  // Indexes: a one-column index is shown as a flag on its column, a longer one below the columns
+  for (const t of tables) {
+    t.indexes ??= [];
+    t.multiIndexes = [];
+    for (const ix of t.indexes) {
+      const cols = ix.cols.map(n => t.cols.find(c => c.name.toLowerCase() === n.toLowerCase()));
+      const missing = ix.cols.find((n, i) => !cols[i]);
+      if (missing) { problems.push(problem(ix.line, `${t.name} has no column ${missing}`)); continue; }
+      ix.cols = cols.map(c => c.name);
+      if (cols.length === 1) cols[0].indexed = true;
+      else t.multiIndexes.push(ix);
     }
   }
   return problems;
@@ -246,14 +275,20 @@ function genText(tables, notes) {
   tables.forEach((t, i) => {
     if (i) out.push('');
     out.push(t.name);
+    // one-column indexes without a name of their own are written as a flag on the column
+    const flagIndexes = (t.indexes ?? []).filter(ix => ix.cols.length === 1 && (!ix.name || ix.name === indexName(t.name, ix.cols)));
     for (const c of t.cols) {
       const parts = [c.name];
       if (c.effType !== defaultType(c)) parts.push(c.effType);
       if (c.pk) parts.push('pk');
       if (c.nullable) parts.push('null');
       if (c.unique) parts.push('unique');
+      if (flagIndexes.some(ix => ix.cols[0] === c.name)) parts.push('index');
       if (c.ref) parts.push('-> ' + refText(c));
       out.push('  ' + parts.join(' '));
+    }
+    for (const ix of (t.indexes ?? []).filter(ix => !flagIndexes.includes(ix))) {
+      out.push(`  index ${ix.name && ix.name !== indexName(t.name, ix.cols) ? ix.name + ' ' : ''}(${ix.cols.join(', ')})`);
     }
   });
   return out.join('\n') + '\n';

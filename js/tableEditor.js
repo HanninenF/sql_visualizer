@@ -15,7 +15,7 @@ $('#typeList').innerHTML = TYPE_SUGGESTIONS.map(t => `<option value="${t}">`).jo
 // dlg.fk: the open foreign-key chooser { row, table, usePk, col, filter }
 let dlg = null;
 
-const blankCol = () => ({ name: '', origName: null, type: '', pk: false, nullable: false, unique: false, ref: null, refCol: null, comment: '' });
+const blankCol = () => ({ name: '', origName: null, type: '', pk: false, nullable: false, unique: false, index: false, ref: null, refCol: null, comment: '' });
 const inlineComment = line => { const i = (line ?? '').indexOf('#'); return i >= 0 ? line.slice(i).trim() : ''; };
 const lc = s => s.toLowerCase();
 const pointsToPk = c => c.target.pkCols.length === 1 && c.target.pkCols[0] === c.targetCol;
@@ -47,6 +47,7 @@ function openTableEditor(name, at = null) {
   dlg.cols = t
     ? t.cols.map(c => ({
         name: c.name, origName: c.name, type: c.type ?? '', pk: c.pk, nullable: c.nullable, unique: c.unique,
+        index: t.indexes.some(ix => !ix.name && ix.cols.length === 1 && lc(ix.cols[0]) === lc(c.name)),
         ref: !c.ref ? null : c.target === t || (!c.target && lc(c.ref) === lc(t.name)) ? SELF : c.target?.name ?? c.ref,
         refCol: !c.ref ? null : !c.target ? c.refCol : pointsToPk(c) ? null : c.targetCol.name,
         comment: inlineComment(lines[c.line - 1]),
@@ -112,6 +113,7 @@ function renderCols() {
       <label class="chk" title="Primary key"><input type="checkbox" class="c-pk"${c.pk ? ' checked' : ''}></label>
       <label class="chk" title="May be NULL"><input type="checkbox" class="c-null"${c.nullable ? ' checked' : ''}></label>
       <label class="chk" title="UNIQUE"><input type="checkbox" class="c-unique"${c.unique ? ' checked' : ''}></label>
+      <label class="chk" title="Index (for faster searches and JOINs on this column)"><input type="checkbox" class="c-index"${c.index ? ' checked' : ''}></label>
       <div class="c-fk">${c.ref
         ? `<button class="fk-chip" data-act="fk" title="Change what this points to">→ ${esc(refLabel(c))}</button>` +
           `<button class="icon-x" data-act="unlink" title="Not a foreign key">×</button>`
@@ -155,6 +157,7 @@ tdCols.addEventListener('input', e => {
   else if (cl.contains('c-pk')) c.pk = e.target.checked;
   else if (cl.contains('c-null')) c.nullable = e.target.checked;
   else if (cl.contains('c-unique')) c.unique = e.target.checked;
+  else if (cl.contains('c-index')) c.index = e.target.checked;
   e.target.classList.remove('invalid');
   refreshHints();
 });
@@ -348,6 +351,7 @@ function saveTable() {
     if (c.pk) parts.push('pk');
     if (c.nullable) parts.push('null');
     if (c.unique) parts.push('unique');
+    if (c.index) parts.push('index');
     if (c.ref) {
       const self = toSelf(c);
       const refCol = self && c.refCol ? renamed.get(lc(c.refCol)) ?? c.refCol : c.refCol;
@@ -373,7 +377,10 @@ function saveTable() {
     if (name !== dlg.orig && pos[dlg.orig]) { pos[name] = pos[dlg.orig]; delete pos[dlg.orig]; }
     const [s, e] = blockRange(lines, t.line - 1);
     const comments = lines.slice(s + 1, e + 1).filter(l => /^\s+#/.test(l)); // keep comment lines inside the table
-    lines.splice(s, e - s + 1, block[0], ...comments, ...block.slice(1));
+    // and index lines (the dialog only shows one-column indexes), following renamed columns
+    const indexLines = lines.slice(s + 1, e + 1).filter(l => INDEX_LINE.test(l.replace(/#.*$/, '')))
+      .map(l => l.replace(/\(([^)]*)\)/, (_, cs) => '(' + cs.split(',').map(n => renamed.get(lc(n.trim())) ?? n.trim()).join(', ') + ')'));
+    lines.splice(s, e - s + 1, block[0], ...comments, ...block.slice(1), ...indexLines);
     at = s + 1;
   } else {
     while (lines.length && !lines[lines.length - 1].trim()) lines.pop();

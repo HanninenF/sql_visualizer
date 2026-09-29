@@ -539,7 +539,7 @@ body.presenting .card-tl, body.presenting #storageNotice { display: none; }
 .field input { max-width: 280px; }
 .col-grid, .col-row {
   display: grid; gap: 6px; align-items: center;
-  grid-template-columns: minmax(110px, 1.2fr) minmax(90px, 1fr) 34px 34px 46px minmax(120px, 1.1fr) 90px;
+  grid-template-columns: minmax(110px, 1.2fr) minmax(90px, 1fr) 34px 34px 46px 40px minmax(120px, 1.1fr) 90px;
 }
 .col-head { font-size: 11px; color: var(--muted); padding: 0 0 4px; text-transform: uppercase; letter-spacing: .06em; }
 .col-head span:nth-child(n+3):nth-child(-n+5) { text-align: center; }

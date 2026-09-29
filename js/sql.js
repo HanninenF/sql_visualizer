@@ -49,6 +49,9 @@ function genSQL(tables) {
     out.push(`CREATE TABLE ${q(t.name)} (\n${defs.join(',\n')}\n);`, '');
   }
   if (deferred.length) out.push(...deferred, '');
+  const indexes = order.flatMap(t => (t.indexes ?? []).filter(ix => ix.cols.every(n => t.cols.some(c => c.name === n)))
+    .map(ix => `CREATE INDEX ${q(ix.name ?? indexName(t.name, ix.cols))} ON ${q(t.name)} (${ix.cols.map(q).join(', ')});`));
+  if (indexes.length) out.push(...indexes, '');
   if (cyclic) out.push('SET FOREIGN_KEY_CHECKS = 1;', '');
   return out.join('\n');
 }
@@ -167,6 +170,8 @@ function parseSQL(src) {
     if (kw === 'CREATE') {
       p.next();
       p.eatW('OR'); p.eatW('REPLACE'); p.eatW('TEMPORARY');
+      const kind = p.eatW('UNIQUE', 'FULLTEXT', 'SPATIAL')?.u;
+      if (p.eatW('INDEX', 'KEY')) { createIndex(p, kind, line, findAcc, warn, error); continue; }
       if (!p.eatW('TABLE')) {
         if (!p.isW('DATABASE', 'SCHEMA')) warn(line, `CREATE ${p.peek()?.v ?? ''} is not shown in the diagram. Ignored.`);
         continue;
@@ -177,7 +182,7 @@ function parseSQL(src) {
       const body = p.group();
       if (!body) { warn(line, `CREATE TABLE ${name.v} without a column list. Ignored.`); continue; }
       if (findAcc(name.v)) { error(name.line, `Table ${name.v} is created twice`); continue; }
-      const acc = { name: name.v, line: name.line, cols: [], pk: null, fks: [], uniques: [] };
+      const acc = { name: name.v, line: name.line, cols: [], pk: null, fks: [], uniques: [], indexes: [] };
       accs.push(acc);
       for (const def of splitTop(body)) parseDef(new Cursor(def), acc, warn, error);
     } else if (kw === 'ALTER') {
@@ -221,13 +226,31 @@ function parseDef(p, acc, warn, error) {
     p.eatW('KEY', 'INDEX');
     if (!p.isP('(')) p.ident();
     acc.uniques.push({ cols: p.identList(), line });
-  } else if (p.isW('KEY', 'INDEX', 'FULLTEXT', 'SPATIAL')) {
-    // plain indexes are not part of the diagram
+  } else if (p.eatW('FULLTEXT', 'SPATIAL')) {
+    // search indexes are not part of the diagram
+  } else if (p.eatW('KEY', 'INDEX')) {
+    const name = p.isP('(') ? null : p.ident();
+    if (p.eatW('USING')) p.next();
+    acc.indexes.push({ name: name?.v ?? null, cols: p.identList(), line });
   } else if (p.isW('CHECK')) {
     warn(line, 'CHECK constraints are not shown. Ignored.');
   } else {
     parseColumn(p, acc, warn, error);
   }
+}
+
+// CREATE [UNIQUE] INDEX name ON table (cols). A UNIQUE one counts as a unique constraint.
+function createIndex(p, kind, line, findAcc, warn, error) {
+  if (p.eatW('IF')) { p.eatW('NOT'); p.eatW('EXISTS'); }
+  const name = p.isW('ON') ? null : p.ident();
+  if (!p.eatW('ON')) { error(line, 'CREATE INDEX without ON table'); return; }
+  const t = p.qname(), acc = t && findAcc(t.v);
+  if (!acc) { error(line, `CREATE INDEX on unknown table ${t?.v ?? ''}`); return; }
+  if (p.eatW('USING')) p.next();
+  const cols = p.identList();
+  if (!cols.length) { error(line, 'CREATE INDEX without columns'); return; }
+  if (kind === 'UNIQUE') acc.uniques.push({ cols, line });
+  else if (!kind) acc.indexes.push({ name: name?.v ?? null, cols, line });
 }
 
 function skipAction(p) { // ON DELETE / ON UPDATE <action>
@@ -304,5 +327,5 @@ function finalizeTable(acc, warn, error) {
     col.ref = fk.rt;
     col.refCol = fk.rcols[0] ?? null; // genText writes just "-> Table" when this is the table's primary key
   }
-  return { name: acc.name, line: acc.line, cols };
+  return { name: acc.name, line: acc.line, cols, indexes: acc.indexes };
 }

@@ -34,7 +34,7 @@ function rowInfo(c) {
     key: c.isPk ? 'PK' : c.ref || c.implicit ? 'FK' : '',
     name: c.name,
     bold: c.isPk,
-    flags: [c.nullable && 'null', c.unique && 'unique'].filter(Boolean).join(' '),
+    flags: [c.nullable && 'null', c.unique && 'unique', c.indexed && 'index'].filter(Boolean).join(' '),
     type: displayType(c),
   };
 }
@@ -47,12 +47,19 @@ function markShown(tables) {
   for (const t of tables) t.shown = state.keysOnly ? t.cols.filter(c => c.isPk || c.ref || c.target || targeted.has(c)) : t.cols;
 }
 
+// Indexes over several columns are listed below the rows: "index (ProductId, StartDate)"
+const FOOT_H = 22;
+const footLines = t => (t.multiIndexes ?? []).map(ix => `(${ix.cols.join(', ')})`);
+const footTop = n => ROWS_TOP + Math.max(1, n) * ROW_H + 6;
+
 function measureTable(t) {
-  const rows = shownCols(t).map(rowInfo);
+  const rows = shownCols(t).map(rowInfo), foot = footLines(t);
   const w = Math.max(MIN_W, textW(t.name, FONTS.head) + 2 * PAD_X + 12, ...rows.map(r =>
     PAD_X + BADGE_W + GAP + textW(r.name, r.bold ? FONTS.pk : FONTS.name) + 16 +
-    (r.flags ? textW(r.flags, FONTS.flags) + 6 : 0) + textW(r.type, FONTS.type) + PAD_X));
-  return { w: Math.ceil(w / 10) * 10, h: ROWS_TOP + Math.max(1, rows.length) * ROW_H + 6, rows };
+    (r.flags ? textW(r.flags, FONTS.flags) + 6 : 0) + textW(r.type, FONTS.type) + PAD_X),
+    ...foot.map(f => 2 * PAD_X + textW('index ', FONTS.flags) + textW(f, FONTS.type)));
+  const h = footTop(rows.length) + (foot.length ? foot.length * FOOT_H + 6 : 0);
+  return { w: Math.ceil(w / 10) * 10, h, rows };
 }
 const rowY = i => ROWS_TOP + i * ROW_H + ROW_H / 2;
 
@@ -456,6 +463,13 @@ function boxMarkup(t, b, interactive) {
       s += `<text class="flags" x="${fx}" y="${y}" text-anchor="end">${row.flags}</text>`;
     }
     s += '</g>';
+  });
+  const foot = footLines(t), fy = footTop(b.rows.length);
+  if (foot.length) s += `<line class="sep" x1="0" y1="${fy + .5}" x2="${w}" y2="${fy + .5}"/>`;
+  foot.forEach((f, k) => {
+    const y = fy + 3 + (k + .5) * FOOT_H;
+    s += `<text class="flags" x="${PAD_X}" y="${y}">index</text>` +
+      `<text class="type" x="${PAD_X + textW('index ', FONTS.flags)}" y="${y}">${esc(f)}</text>`;
   });
   s += `<rect class="outline" x=".5" y=".5" width="${w - 1}" height="${h - 1}" rx="${r - .5}"/></g>`;
   return s;
