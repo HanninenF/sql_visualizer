@@ -161,7 +161,7 @@ ta.addEventListener('input', () => {
 //   sqlviz.docs       the tabs: { list: [{ id, name }], active }
 //   sqlviz.doc.<id>   one diagram: text, SQL, mode, box positions and the view (pan/zoom)
 // `state` holds the preferences plus the active diagram's fields; `pos` its box positions.
-const SETTINGS = ['style', 'colors', 'fontSize', 'wrap', 'notation', 'implicit', 'keysOnly', 'panel', 'leftW'];
+const SETTINGS = ['style', 'colors', 'fontSize', 'wrap', 'notation', 'implicit', 'keysOnly', 'dataView', 'panel', 'leftW'];
 // base: the text the diagram was created with (an example, or empty), to tell whether it has changed
 const DOC_DEFAULTS = { text: '', sql: '', mode: 'text', textStale: false, sqlStale: true, base: null };
 const docKey = id => 'doc.' + id;
@@ -185,7 +185,7 @@ if (!docs?.list?.length) {
 if (!docs.list.some(d => d.id === docs.active)) docs.active = docs.list[0].id;
 
 const state = Object.assign({
-  style: 'classic', colors: 'bleak', fontSize: 13, wrap: true, notation: 'arrows', implicit: false, keysOnly: false, panel: 'mid', leftW: null, ...DOC_DEFAULTS,
+  style: 'classic', colors: 'bleak', fontSize: 13, wrap: true, notation: 'arrows', implicit: false, keysOnly: false, dataView: false, panel: 'mid', leftW: null, ...DOC_DEFAULTS,
 }, store.get('settings', {}));
 let pos = {};
 let docView = null; // the active diagram's saved pan/zoom, if any
@@ -401,6 +401,27 @@ $('#keysBtn').onclick = () => {
   saveState();
 };
 applyKeysOnly();
+
+// Data view: sample rows in every box, and an arrow from each foreign key value to its row.
+// The boxes grow, so the tables are spread out; turning it off puts them back where they were.
+let posBeforeData = null;
+function applyDataView() {
+  const b = $('#dataBtn');
+  b.classList.toggle('on', state.dataView);
+  b.setAttribute('aria-pressed', String(state.dataView));
+}
+$('#dataBtn').onclick = () => {
+  state.dataView = !state.dataView;
+  applyDataView();
+  if (state.dataView) posBeforeData = { id: docs.active, pos: structuredClone(pos) };
+  else if (posBeforeData?.id === docs.active) { Object.assign(pos, posBeforeData.pos); saveDoc(); }
+  if (!state.dataView) posBeforeData = null;
+  drawDiagram();
+  if (state.dataView || boxesOverlap()) autoLayout();
+  fit();
+  saveState();
+};
+applyDataView();
 
 // Menus: Export (app bar) and Text colours (editor header)
 const MENUS = [['#exportBtn', '#exportMenu'], ['#schemeBtn', '#schemeMenu']];

@@ -44,6 +44,18 @@
   <button id="styleBtn" class="icon-btn style-btn" aria-pressed="false">
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path class="head" d="M2.5 5.5V4a1.5 1.5 0 0 1 1.5-1.5h10A1.5 1.5 0 0 1 15.5 4v1.5z"/><rect class="frame" x="2.5" y="2.5" width="13" height="13" rx="1.5"/><path class="rows" d="M2.5 5.5h13M5 8.5h8M5 11.5h6"/></svg>
   </button>
+  <button id="implicitBtn" class="tool" aria-pressed="false" title="Also draw dashed arrows for columns named after a table + Id (OwnerId → Owner), without ->">
+    <svg width="14" height="14" class="ico thin" aria-hidden="true"><rect x="1" y="1.5" width="4" height="11" rx="1"/><circle cx="5" cy="9.5" r="1.2" fill="currentColor"/><path d="M6.5 9.5h2V4.5h1.3" stroke-dasharray="1.6 1.4"/><path d="M10.2 2.8 12.6 4.5l-2.4 1.7z" fill="currentColor"/></svg>
+    Implicit
+  </button>
+  <button id="keysBtn" class="tool" aria-pressed="false" title="Show only key columns: primary keys, foreign keys and the columns they point to">
+    <svg width="14" height="14" class="ico thin" aria-hidden="true"><circle cx="4.5" cy="7" r="2.5"/><path d="M7 7h5.5M10.5 7v2M12.5 7v1.5"/></svg>
+    Keys only
+  </button>
+  <button id="dataBtn" class="tool" aria-pressed="false" title="Data view: every table shows a few made-up rows, with an arrow from each foreign key value to the row it points to">
+    <svg width="14" height="14" class="ico thin" aria-hidden="true"><rect x="1.5" y="2" width="11" height="10" rx="1.5"/><path d="M1.5 5.5h11M1.5 8.8h11M5.5 5.5V12"/></svg>
+    Data
+  </button>
   <div class="vsep"></div>
   <select id="examples" class="select" title="Load an example">
     <option value="" selected disabled>Open example…</option>
@@ -217,8 +229,6 @@
       <g id="vp"></g>
     </svg>
 
-    <div id="gridLayer"><div id="gridWorld"></div></div>
-
     <div id="emptyState" class="empty" hidden>
       <div class="empty-title">No tables yet</div>
       <div>Type a table name in the editor, or use <b>New table</b>.</div>
@@ -233,21 +243,6 @@
       <button id="layoutBtn" class="tool" title="Rearrange all tables">
         <svg width="14" height="14" class="ico thin" aria-hidden="true"><rect x="1.5" y="1.5" width="4.5" height="4.5" rx="1"/><rect x="8" y="1.5" width="4.5" height="4.5" rx="1"/><rect x="1.5" y="8" width="4.5" height="4.5" rx="1"/><rect x="8" y="8" width="4.5" height="4.5" rx="1"/></svg>
         Auto layout
-      </button>
-      <div class="vsep sm"></div>
-      <button id="implicitBtn" class="tool" aria-pressed="false" title="Also draw dashed arrows for columns named after a table + Id (OwnerId → Owner), without ->">
-        <svg width="14" height="14" class="ico thin" aria-hidden="true"><rect x="1" y="1.5" width="4" height="11" rx="1"/><circle cx="5" cy="9.5" r="1.2" fill="currentColor"/><path d="M6.5 9.5h2V4.5h1.3" stroke-dasharray="1.6 1.4"/><path d="M10.2 2.8 12.6 4.5l-2.4 1.7z" fill="currentColor"/></svg>
-        Implicit
-      </button>
-      <div class="vsep sm"></div>
-      <button id="keysBtn" class="tool" aria-pressed="false" title="Show only key columns: primary keys, foreign keys and the columns they point to">
-        <svg width="14" height="14" class="ico thin" aria-hidden="true"><circle cx="4.5" cy="7" r="2.5"/><path d="M7 7h5.5M10.5 7v2M12.5 7v1.5"/></svg>
-        Keys only
-      </button>
-      <div class="vsep sm"></div>
-      <button id="sampleBtn" class="tool" aria-pressed="false" title="Sample data: click a table to see a few made-up rows">
-        <svg width="14" height="14" class="ico thin" aria-hidden="true"><rect x="1.5" y="2" width="11" height="10" rx="1.5"/><path d="M1.5 5.5h11M1.5 8.8h11M5.5 5.5V12"/></svg>
-        Sample data
       </button>
     </div>
 

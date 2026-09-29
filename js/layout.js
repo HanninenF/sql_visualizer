@@ -23,7 +23,9 @@ function layoutEdges(tables) {
   const out = [];
   for (const t of tables) {
     shownCols(t).forEach((c, i) => {
-      if (c.target && c.target !== t) out.push({ from: t, to: c.target, fy: rowY(i), ty: rowY(shownCols(c.target).indexOf(c.targetCol)) });
+      if (!c.target || c.target === t) return;
+      if (state.dataView) out.push({ from: t, to: c.target, fy: dataRowY(0), ty: dataRowY(0) });
+      else out.push({ from: t, to: c.target, fy: rowY(i), ty: rowY(shownCols(c.target).indexOf(c.targetCol)) });
     });
   }
   return out;

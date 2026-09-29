@@ -52,7 +52,52 @@ const FOOT_H = 22;
 const footLines = t => (t.multiIndexes ?? []).map(ix => `(${ix.cols.join(', ')})`);
 const footTop = n => ROWS_TOP + Math.max(1, n) * ROW_H + 6;
 
+// Data view: the box is a real table, column names across and a few sample rows below
+// (see sample.js). Instead of arrows, colours link the rows: each row of a referenced
+// table has a colour, and a foreign key value gets the colour of the row it points to.
+const COLHEAD_H = 26, DATA_H = 26, CELL_GAP = 18, CELL_MAX = 24;
+const FONT_DHEAD = `600 11px ${UI_FONT}`;
+const dataRowY = k => HEAD_H + 6 + COLHEAD_H + k * DATA_H + DATA_H / 2;
+const cellText = v => v == null ? 'NULL' : v.length > CELL_MAX ? v.slice(0, CELL_MAX - 1) + '…' : v;
+
+// Every referenced row in the diagram gets its own hue. Hues step by the golden angle,
+// so neighbours (the rows of one table, and the next table's rows) are far apart on the wheel.
+const hueCache = new WeakMap();
+function rowHues(tables) {
+  if (hueCache.has(tables)) return hueCache.get(tables);
+  const data = sampleData(tables), hues = new Map();
+  const targeted = new Set(tables.flatMap(t => t.cols.map(c => c.target).filter(Boolean)));
+  let i = 0;
+  for (const t of tables) {
+    if (targeted.has(t)) data.get(t).forEach((_, k) => hues.set(`${t.name}#${k}`, Math.round((20 + i++ * 137.508) % 360)));
+  }
+  hueCache.set(tables, hues);
+  return hues;
+}
+
+// cell: { text, key, hue }. key names the row a coloured cell belongs to ("Owner#2"),
+// so hovering one lights up every cell with the same key.
+function measureData(t) {
+  const data = sampleData(model.tables), cols = shownCols(t), rows = data.get(t) ?? [];
+  const targeted = new Set(model.tables.flatMap(o => o.cols.map(c => c.targetCol).filter(Boolean)));
+  const hues = rowHues(model.tables);
+  const cells = rows.map((r, k) => cols.map(c => {
+    const v = r.values.get(c), cell = { text: cellText(v) };
+    if (c.target && v != null) {
+      const j = data.get(c.target).findIndex(o => o.values.get(c.targetCol) === v);
+      if (j >= 0) cell.key = `${c.target.name}#${j}`;
+    } else if (targeted.has(c)) cell.key = `${t.name}#${k}`;
+    if (cell.key) cell.hue = hues.get(cell.key) ?? 0;
+    return cell;
+  }));
+  const cws = cols.map((c, i) => Math.max(textW(c.name, FONT_DHEAD), ...cells.map(row => textW(row[i].text, FONTS.type))));
+  const xs = cws.map((_, i) => PAD_X + cws.slice(0, i).reduce((a, b) => a + b + CELL_GAP, 0));
+  const w = Math.max(MIN_W, textW(t.name, FONTS.head) + 2 * PAD_X + 12, 2 * PAD_X + cws.reduce((a, b) => a + b, 0) + CELL_GAP * Math.max(0, cols.length - 1));
+  return { w: Math.ceil(w / 10) * 10, h: dataRowY(Math.max(1, rows.length)) - DATA_H / 2 + 6, rows: [], data: { cols, cells, xs, cws } };
+}
+
 function measureTable(t) {
+  if (state.dataView) return measureData(t);
   const rows = shownCols(t).map(rowInfo), foot = footLines(t);
   const w = Math.max(MIN_W, textW(t.name, FONTS.head) + 2 * PAD_X + 12, ...rows.map(r =>
     PAD_X + BADGE_W + GAP + textW(r.name, r.bold ? FONTS.pk : FONTS.name) + 16 +
@@ -371,6 +416,18 @@ text { dominant-baseline: central; }
 .flags { font: ${FONTS.flags}; fill: var(--tok-flag, #6e3a2e); }
 .type { font: ${FONTS.type}; fill: var(--muted, #5e5440); }
 .row.bad .name, .row.bad .key { fill: var(--err, #7a2e22); }
+.dhead { font: ${FONT_DHEAD}; fill: var(--muted, #5e5440); }
+.dhead.pk, .dcell.pk { fill: var(--accent, #3a4658); }
+.dhead.fk, .dcell.fk { fill: var(--tok-ref, #525e1e); }
+.dcell { font: ${FONTS.type}; fill: var(--fg, #1c1812); }
+.dcell.pk { font-weight: 600; }
+.dcell.null { fill: var(--muted, #5e5440); font-style: italic; }
+.drow .hit { fill: transparent; }
+.drow:hover .hit { fill: var(--row-hover, #f5efe2); }
+.dmark { stroke: none; }
+.dmark.hl { stroke: var(--fg, #1c1812); stroke-width: 1.5; }
+.dmark { fill: hsl(var(--h) var(--dv-s, 70%) var(--dv-l, 84%)); }
+.dmark ~ .dcell.pk, .dmark ~ .dcell.fk { fill: var(--fg, #1c1812); }
 .edge { fill: none; stroke: var(--edge, #5e5440); stroke-width: 1.4; stroke-linejoin: round; }
 .edge.implicit { stroke-dasharray: 5 4; }
 .ahead { fill: var(--edge, #5e5440); }
@@ -399,10 +456,10 @@ function computeGeometry() {
   ensurePositions(tables, dims);
   const boxes = new Map(tables.map(t => {
     const d = dims.get(t);
-    return [t, { x: pos[t.name].x, y: pos[t.name].y, w: d.w, h: d.h, rows: d.rows }];
+    return [t, { x: pos[t.name].x, y: pos[t.name].y, w: d.w, h: d.h, rows: d.rows, data: d.data }];
   }));
   const edges = [];
-  for (const t of tables) {
+  if (!state.dataView) for (const t of tables) {
     shownCols(t).forEach((c, i) => {
       if (!c.target) return;
       const a = boxes.get(t), b = boxes.get(c.target);
@@ -423,7 +480,7 @@ function computeGeometry() {
   }
   // In the ER notations each arrow's "one" end has its own symbol, so arrows that point
   // at the same row are spread a little apart instead of meeting in one point
-  if (state.notation !== 'arrows') {
+  if (state.notation !== 'arrows' && !state.dataView) {
     const byTarget = new Map();
     for (const e of edges) (byTarget.get(e.to) ?? byTarget.set(e.to, []).get(e.to)).push(e);
     for (const group of byTarget.values()) {
@@ -438,8 +495,28 @@ function computeGeometry() {
     }
   }
   routeEdges(edges, [...boxes.values()]);
-  if (state.notation === 'uml' || state.notation === 'ratio') placeLabels(edges);
+  if ((state.notation === 'uml' || state.notation === 'ratio') && !state.dataView) placeLabels(edges);
   geometry = { boxes, edges, dims };
+}
+
+function dataBoxBody(t, b, interactive) {
+  const { cols, cells, xs, cws } = b.data, ch = HEAD_H + 6 + COLHEAD_H / 2;
+  const kind = c => c.isPk ? ' pk' : c.target ? ' fk' : '';
+  let s = cols.map((c, i) => `<text class="dhead${kind(c)}" x="${xs[i]}" y="${ch}">` +
+    (c.target ? `<title>${esc(c.name)} → ${esc(c.target.name)}.${esc(c.targetCol.name)}</title>` : '') + `${esc(c.name)}</text>`).join('');
+  s += `<line class="sep" x1="${PAD_X}" y1="${HEAD_H + 6 + COLHEAD_H - .5}" x2="${b.w - PAD_X}" y2="${HEAD_H + 6 + COLHEAD_H - .5}"/>`;
+  if (!cells.length) return s + `<text class="dcell null" x="${PAD_X}" y="${dataRowY(0)}">no rows</text>`;
+  cells.forEach((row, k) => {
+    const y = dataRowY(k);
+    s += `<g class="drow">`;
+    if (interactive) s += `<rect class="hit" x="1" y="${y - DATA_H / 2}" width="${b.w - 2}" height="${DATA_H}"/>`;
+    row.forEach((cell, i) => {
+      if (cell.key) s += `<rect class="dmark" style="--h:${cell.hue}" data-k="${esc(cell.key)}" x="${xs[i] - 5}" y="${y - DATA_H / 2 + 3}" width="${cws[i] + 10}" height="${DATA_H - 6}" rx="4"/>`;
+      s += `<text class="dcell${kind(cols[i])}${cell.text === 'NULL' ? ' null' : ''}" x="${xs[i]}" y="${y}">${esc(cell.text)}</text>`;
+    });
+    s += '</g>';
+  });
+  return s;
 }
 
 function boxMarkup(t, b, interactive) {
@@ -449,6 +526,8 @@ function boxMarkup(t, b, interactive) {
   s += `<path class="head" d="M0,${r}A${r},${r} 0 0 1 ${r},0H${w - r}A${r},${r} 0 0 1 ${w},${r}V${HEAD_H}H0Z"/>`;
   s += `<line class="sep" x1="0" y1="${HEAD_H + .5}" x2="${w}" y2="${HEAD_H + .5}"/>`;
   s += `<text class="title" x="${PAD_X}" y="${HEAD_H / 2}">${esc(t.name)}</text>`;
+  if (b.data) return s + dataBoxBody(t, b, interactive) +
+    `<rect class="outline" x=".5" y=".5" width="${w - 1}" height="${h - 1}" rx="${r - .5}"/></g>`;
   shownCols(t).forEach((c, i) => {
     const row = b.rows[i], y = rowY(i);
     const cls = 'row' + (c.isPk ? ' pk' : '') + (c.ref && !c.target ? ' bad' : '');
@@ -529,7 +608,7 @@ function endMarks(e) {
   const sd = Math.sign(pts[1][0] - sx) || 1, td = Math.sign(pts[n - 2][0] - tx) || -1;
   const labels = () => e.labels.map(l =>
     `<text class="mult" x="${l.x}" y="${l.y}" text-anchor="${l.anchor}">${l.text}</text>`).join('');
-  switch (state.notation) {
+  switch (state.dataView ? 'arrows' : state.notation) {
     case 'crowsfoot': {
       const th = e.small ? 3.5 : 6;
       // referenced end: exactly one, or zero-or-one when the FK may be NULL
@@ -570,7 +649,6 @@ function drawDiagram() {
   $('#emptyState').hidden = model.tables.length > 0;
   if (hoverTable) highlightTable(hoverTable);
   if (revealName) { reveal(revealName); revealName = null; }
-  renderGrids();
 }
 
 // Hovering a table highlights its arrows (drawn on top); hovering an arrow highlights it
@@ -589,6 +667,9 @@ svg.addEventListener('mouseover', e => {
   if (drag) return;
   const tbl = e.target.closest('.tbl'), edge = e.target.closest('.edge-g');
   hoverTable = tbl ? tbl.dataset.t : null;
+  // data view: hovering a row outlines its coloured cells and every cell with the same colour key
+  const keys = new Set([...(e.target.closest('.drow')?.querySelectorAll('.dmark') ?? [])].map(m => m.dataset.k));
+  vp.querySelectorAll('.dmark').forEach(m => m.classList.toggle('hl', keys.has(m.dataset.k)));
   if (edge) setHighlight([edge]);
   else if (tbl) highlightTable(tbl.dataset.t);
   else setHighlight([]);
@@ -606,7 +687,6 @@ function applyView() {
   svg.style.backgroundSize = `${20 * view.s}px ${20 * view.s}px`;
   svg.style.backgroundPosition = `${view.tx}px ${view.ty}px`;
   $('#zoomLabel').textContent = Math.round(view.s * 100) + '%';
-  placeGrids();
   saveState(); // each diagram remembers its pan/zoom (the save is debounced)
 }
 function toWorld(e) {
@@ -709,7 +789,6 @@ function endDrag() {
         const t = model.tables.find(t => t.name === drag.name);
         if (t) selectLine(t.line);
       }
-      tableClicked(drag.name);
     }
   }
   svg.classList.remove('panning', 'dragging');
