@@ -161,7 +161,7 @@ function ensurePositions(tables, dims) {
 // In between they are routed orthogonally around the boxes (A* on a grid),
 // with a cost for every bend. An arrow may never run through another arrow's end point, and running
 // along a lane used by an arrow to a *different* Id is very expensive (it would look like it points there).
-const ROUTE = { GAP: 30, MARGIN: 10, STUB: 20, GRID: 10, BEND: 40, SHARE_OTHER: 60, CROSS: 30 };
+const ROUTE = { GAP: 30, MARGIN: 10, STUB: 20, GRID: 10, BEND: 40, SHARE_OTHER: 60, CROSS: 30, MERGE: 0.5 };
 
 // side: force a same-side loop ('L' or 'R'); used to try both sides of a self-reference
 function chooseSides(e, side = null) {
@@ -191,7 +191,7 @@ function simplePath(e) {
 function routeEdges(edges, boxes) {
   if (!edges.length) return;
   edges.forEach(e => chooseSides(e));
-  const { MARGIN, GRID, BEND, SHARE_OTHER, CROSS } = ROUTE;
+  const { MARGIN, GRID, BEND, SHARE_OTHER, CROSS, MERGE } = ROUTE;
   // a self-reference can loop around either side: both are tried, the cheaper one wins
   const SIDE_KEYS = ['x1', 'x2', 'outDir', 'inDir', 'sx', 'tx'];
   const variants = e => e.a !== e.b ? [e] : ['L', 'R'].map(side => {
@@ -269,15 +269,18 @@ function routeEdges(edges, boxes) {
 
   function astar(s, t, e) {
     const dir0 = e.outDir, dirEnd = e.inDir, myT = 'T:' + e.to;
+    // Running along an arrow to the same row is cheap (they merge into one line, drawn
+    // thicker); along one to another row is very expensive. Passing through a point another
+    // arrow uses, without running along it, is a crossing (a jump), whatever its target.
     const shareCost = key => {
       const u = used.get(key);
-      if (u) for (const to of u) if (to !== e.to) return SHARE_OTHER;
-      return 0;
+      if (!u) return 0;
+      for (const to of u) if (to !== e.to) return SHARE_OTHER;
+      return -MERGE;
     };
-    const crossCost = n => {
-      const u = usedNodes.get(n);
-      if (u) for (const to of u) if (to !== e.to) return CROSS;
-      return 0;
+    const crossCost = (n, key) => {
+      if (used.get(key)?.has(e.to)) return 0;
+      return usedNodes.get(n)?.size ? CROSS : 0;
     };
     g.fill(Infinity);
     const tx = xs[t % nx], ty = ys[Math.floor(t / nx)];
@@ -309,7 +312,8 @@ function routeEdges(edges, boxes) {
         const r = reserved.get(m);
         if (r && m !== t && r !== myT) continue;
         const len = Math.abs(xs[ii] - xs[i]) + Math.abs(ys[jj] - ys[j]);
-        const cost = gc + len * (1 + shareCost(segKey(n, m))) + crossCost(m) + (nd === d ? 0 : BEND);
+        const key = segKey(n, m);
+        const cost = gc + len * (1 + shareCost(key)) + crossCost(m, key) + (nd === d ? 0 : BEND);
         relax(st, m * 4 + nd, cost, h(m));
       }
     }
