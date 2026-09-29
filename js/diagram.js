@@ -446,6 +446,7 @@ text { dominant-baseline: central; }
 .dmark { fill: hsl(var(--h) var(--dv-s, 70%) var(--dv-l, 84%)); }
 .dmark ~ .dcell.pk, .dmark ~ .dcell.fk { fill: var(--fg, #1c1812); }
 .edge { fill: none; stroke: var(--edge, #5e5440); stroke-width: 1.4; stroke-linejoin: round; }
+.bundle { stroke: var(--edge, #5e5440); stroke-linecap: round; pointer-events: none; }
 .ahead { fill: var(--edge, #5e5440); }
 .start { fill: var(--canvas, #fff); stroke: var(--edge, #5e5440); stroke-width: 1.5; }
 .edge-g.hl .edge { stroke: var(--accent, #3a4658); stroke-width: 2; }
@@ -477,7 +478,45 @@ function computeGeometry() {
   const edges = state.dataView ? [] : diagramEdges(tables, boxes);
   routeEdges(edges, [...boxes.values()]);
   if ((state.notation === 'uml' || state.notation === 'ratio') && !state.dataView) placeLabels(edges);
-  geometry = { boxes, edges, dims };
+  geometry = { boxes, edges, dims, bundles: bundles(edges) };
+}
+
+// Where several arrows run along the same stretch, that stretch is drawn thicker:
+// 2 arrows twice the width, 3 three times, and so on. Returns [{ x1, y1, x2, y2, n }].
+// A stretch stops short of the arrowheads and start circles, so they stay visible.
+function bundles(edges) {
+  const lines = new Map(); // "h:y" / "v:x" → [{ a, b, k }] intervals along that line
+  const ends = new Set(edges.flatMap(e => [e.points[0], e.points[e.points.length - 1]].map(p => p.join(','))));
+  edges.forEach((e, k) => {
+    const p = simplify(e.points);
+    for (let i = 1; i < p.length; i++) {
+      const [ax, ay] = p[i - 1], [bx, by] = p[i];
+      const [key, a, b] = ay === by ? ['h:' + ay, ax, bx] : ['v:' + ax, ay, by];
+      if (!lines.has(key)) lines.set(key, []);
+      lines.get(key).push({ a: Math.min(a, b), b: Math.max(a, b), k });
+    }
+  });
+  const out = [], TRIM = 10;
+  for (const [key, ivs] of lines) {
+    if (ivs.length < 2) continue;
+    const horiz = key[0] === 'h', at = +key.slice(2);
+    const cuts = [...new Set(ivs.flatMap(v => [v.a, v.b]))].sort((p, q) => p - q);
+    let run = null;
+    const flush = () => {
+      if (!run || run.n < 2) return;
+      const pt = v => (horiz ? [v, at] : [at, v]).join(',');
+      const a = run.a + (ends.has(pt(run.a)) ? TRIM : 0), b = run.b - (ends.has(pt(run.b)) ? TRIM : 0);
+      if (b > a) out.push(horiz ? { x1: a, y1: at, x2: b, y2: at, n: run.n } : { x1: at, y1: a, x2: at, y2: b, n: run.n });
+    };
+    for (let i = 1; i < cuts.length; i++) {
+      const a = cuts[i - 1], b = cuts[i];
+      const n = new Set(ivs.filter(v => v.a <= a && v.b >= b).map(v => v.k)).size;
+      if (run && run.n === n && run.b === a) run.b = b;
+      else { flush(); run = { a, b, n }; }
+    }
+    flush();
+  }
+  return out;
 }
 
 // The arrows between boxes (Map table → box), before routing
@@ -662,6 +701,9 @@ function diagramMarkup(interactive) {
   let s = '';
   for (const [t, b] of geometry.boxes) s += boxMarkup(t, b, interactive);
   for (const e of geometry.edges) s += edgeMarkup(e, interactive);
+  for (const l of geometry.bundles ?? []) {
+    s += `<line class="bundle" x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke-width="${1.4 * l.n}"/>`;
+  }
   return s;
 }
 
