@@ -24,8 +24,7 @@ function layoutEdges(tables) {
   for (const t of tables) {
     shownCols(t).forEach((c, i) => {
       if (!c.target || c.target === t) return;
-      if (state.dataView) out.push({ from: t, to: c.target, fy: dataRowY(0), ty: dataRowY(0) });
-      else out.push({ from: t, to: c.target, fy: rowY(i), ty: rowY(shownCols(c.target).indexOf(c.targetCol)) });
+      out.push({ from: t, to: c.target, fy: rowY(i), ty: rowY(shownCols(c.target).indexOf(c.targetCol)) });
     });
   }
   return out;
@@ -142,6 +141,7 @@ function arrangeAll(tables, dims) {
   if (!tables.length) return;
   const edges = layoutEdges(tables);
   const old = tables.map(t => pos[t.name]).filter(Boolean);
+  if (state.dataView) return moveTo(packTight(tables, dims), old);
 
   // connected groups of tables, each laid out on its own; single tables go in a row below
   const nbrs = new Map(tables.map(t => [t, new Set()]));
@@ -181,12 +181,45 @@ function arrangeAll(tables, dims) {
     rowH = Math.max(rowH, h);
   }
 
-  // keep the diagram where it was on the canvas; a brand new one goes in the middle of the view
+  moveTo(placed, old);
+}
+
+// Keep the diagram where it was on the canvas; a brand new one goes in the middle of the view
+function moveTo(placed, old) {
   const bb = bboxOf([...placed.values()]), mid = viewCenter();
   const origin = old.length ? { x: Math.min(...old.map(p => p.x)), y: Math.min(...old.map(p => p.y)) }
     : mid ? { x: mid.x - bb.w / 2, y: mid.y - bb.h / 2 } : { x: 40, y: 40 };
   const dx = snap(origin.x - bb.x), dy = snap(origin.y - bb.y);
   for (const [t, r] of placed) pos[t.name] = { x: snap(r.x) + dx, y: snap(r.y) + dy };
+}
+
+// Data view draws no arrows, so the boxes just go as close together as they fit:
+// tallest first, each at the highest free spot (then leftmost) within a width, trying
+// several widths and keeping the block closest to the canvas shape
+function packTight(tables, dims) {
+  const order = [...tables].sort((a, b) => dims.get(b).h - dims.get(a).h);
+  const aspect = canvasAspect(), widest = Math.max(...order.map(t => dims.get(t).w));
+  const total = order.reduce((sum, t) => sum + (dims.get(t).w + AUTO.COL_GAP) * (dims.get(t).h + AUTO.ROW_GAP), 0);
+  let best = null;
+  for (let f = 0.6; f <= 2; f += 0.1) {
+    const W = Math.max(widest, Math.sqrt(total * aspect) * f);
+    const placed = new Map();
+    for (const t of order) {
+      const { w, h } = dims.get(t);
+      let spot = null;
+      for (const x of [0, ...[...placed.values()].map(r => r.x + r.w + AUTO.COL_GAP)]) {
+        if (x + w > W && x) continue;
+        const y = Math.max(0, ...[...placed.values()]
+          .filter(r => r.x < x + w + AUTO.COL_GAP && r.x + r.w + AUTO.COL_GAP > x)
+          .map(r => r.y + r.h + AUTO.ROW_GAP));
+        if (!spot || y < spot.y || (y === spot.y && x < spot.x)) spot = { x, y };
+      }
+      placed.set(t, { ...spot, w, h });
+    }
+    const bb = bboxOf([...placed.values()]), size = Math.max(bb.w, bb.h * aspect);
+    if (!best || size < best.size) best = { placed, size };
+  }
+  return best.placed;
 }
 
 // Lay out one connected group. Returns { placed: Map table → rect, w, h }.
