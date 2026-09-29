@@ -228,7 +228,14 @@ function layoutGroup(nodes, dims, edges, deadline) {
   const maxLayer = Math.max(...layer.values());
   const cols = Array.from({ length: maxLayer + 1 }, () => []);
   for (const t of nodes) cols[maxLayer - layer.get(t)].push(t); // referenced tables on the right
-  const colOf = t => maxLayer - layer.get(t);
+  // which column a table is in (kept up to date when the polish moves tables between columns)
+  const colIdx = new Map();
+  const reindex = () => {
+    for (let c = cols.length - 1; c >= 0; c--) if (!cols[c].length) cols.splice(c, 1);
+    cols.forEach((col, c) => col.forEach(t => colIdx.set(t, c)));
+  };
+  reindex();
+  const colOf = t => colIdx.get(t);
 
   // order within columns: barycenter sweeps, keeping the order with the fewest crossings
   const links = new Map(nodes.map(t => [t, []]));
@@ -264,17 +271,48 @@ function layoutGroup(nodes, dims, edges, deadline) {
 
   const place = () => placeColumns(cols, colOf, dims, edges);
   let placed = place();
-  // polish: swap neighbours in a column while the drawn arrows get fewer jumps
+  // Lookup tables: point nowhere, and only one table points to them (Artist, Label, …).
+  // Such a table may also sit right above or below that one table, in its column, to
+  // leave the gap to the next column to a bigger table (AlbumToArtist → Album).
+  const referrers = t => new Set(edges.filter(e => e.to === t && e.from !== t).map(e => e.from));
+  const lookups = nodes.filter(t => !edges.some(e => e.from === t && e.to !== t) && referrers(t).size === 1);
+  // polish: try swapping neighbours in a column, and moving lookup tables next to the
+  // table that points to them; keep whatever makes the drawn arrows better
   if (!state.dataView) {
     let cost = drawnCost(nodes, placed);
+    const attempt = change => {
+      const saved = cols.map(col => [...col]);
+      change();
+      reindex();
+      const p = place(), c = drawnCost(nodes, p);
+      if (c < cost) { cost = c; placed = p; return true; }
+      cols.length = 0;
+      cols.push(...saved);
+      colIdx.clear();
+      reindex();
+      return false;
+    };
     for (let round = 0; round < 3 && performance.now() < deadline; round++) {
       let better = false;
-      for (const col of cols) {
-        for (let i = 0; i + 1 < col.length && performance.now() < deadline; i++) {
-          [col[i], col[i + 1]] = [col[i + 1], col[i]];
-          const p = place(), c = drawnCost(nodes, p);
-          if (c < cost) { cost = c; placed = p; better = true; }
-          else [col[i], col[i + 1]] = [col[i + 1], col[i]];
+      for (const t of lookups) {
+        const [child] = referrers(t);
+        if (colOf(t) === colOf(child)) continue;
+        // only to make room: the table pointing to it also points to a bigger table in its column
+        const rivals = edges.some(e => e.from === child && e.to !== t && colOf(e.to) === colOf(t) && !lookups.includes(e.to));
+        if (!rivals) continue;
+        for (const below of [false, true]) {
+          if (performance.now() >= deadline) break;
+          const moved = attempt(() => {
+            cols[colOf(t)].splice(cols[colOf(t)].indexOf(t), 1);
+            const col = cols[colOf(child)];
+            col.splice(col.indexOf(child) + (below ? 1 : 0), 0, t);
+          });
+          if (moved) { better = true; break; }
+        }
+      }
+      for (let c = 0; c < cols.length; c++) {
+        for (let i = 0; i + 1 < cols[c].length && performance.now() < deadline; i++) {
+          if (attempt(() => { const col = cols[c]; [col[i], col[i + 1]] = [col[i + 1], col[i]]; })) better = true;
         }
       }
       if (!better) break;
@@ -308,7 +346,7 @@ function placeColumns(cols, colOf, dims, edges) {
   const off = new Map(); // table → [{ other, dy }] with dy = the y difference that makes an arrow level
   for (const t of y.keys()) off.set(t, []);
   for (const e of edges) {
-    if (e.from === e.to) continue;
+    if (e.from === e.to || colOf(e.from) === colOf(e.to)) continue; // same column: can't be level
     off.get(e.from).push({ other: e.to, dy: e.ty - e.fy });
     off.get(e.to).push({ other: e.from, dy: e.fy - e.ty });
   }
@@ -356,6 +394,14 @@ function placeColumns(cols, colOf, dims, edges) {
   return placed;
 }
 
+// How long two orthogonal segments run on top of each other
+function sharedLength([[ax, ay], [bx, by]], [[cx, cy], [dx, dy]]) {
+  const overlap = (a, b, c, d) => Math.max(0, Math.min(Math.max(a, b), Math.max(c, d)) - Math.max(Math.min(a, b), Math.min(c, d)));
+  if (ay === by && cy === dy && ay === cy) return overlap(ax, bx, cx, dx);
+  if (ax === bx && cx === dx && ax === cx) return overlap(ay, by, cy, dy);
+  return 0;
+}
+
 // How the arrows come out when actually routed: jumps count most, then total length
 function drawnCost(nodes, placed) {
   const boxes = new Map(nodes.map(t => [t, { ...placed.get(t), rows: [] }]));
@@ -363,9 +409,15 @@ function drawnCost(nodes, placed) {
   if (!edges.length) return 0;
   routeEdges(edges, [...boxes.values()]);
   let cost = 0;
-  for (const e of edges) {
+  const segs = edges.map(e => e.points.slice(1).map((q, i) => [e.points[i], q]));
+  for (const [k, e] of edges.entries()) {
     cost += (e.jumps ?? 0) * 1000;
-    for (let i = 1; i < e.points.length; i++) cost += Math.abs(e.points[i][0] - e.points[i - 1][0]) + Math.abs(e.points[i][1] - e.points[i - 1][1]);
+    for (const [p, q] of segs[k]) cost += Math.abs(q[0] - p[0]) + Math.abs(q[1] - p[1]);
+    // arrows to different rows running along the same line look like one arrow: very bad
+    for (let j = k + 1; j < edges.length; j++) {
+      if (edges[j].to === e.to) continue;
+      for (const s of segs[k]) for (const u of segs[j]) cost += 40 * sharedLength(s, u);
+    }
   }
   return cost;
 }
