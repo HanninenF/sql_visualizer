@@ -33,8 +33,8 @@
   <button id="styleBtn" class="icon-btn style-btn" aria-pressed="false">
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path class="head" d="M2.5 5.5V4a1.5 1.5 0 0 1 1.5-1.5h10A1.5 1.5 0 0 1 15.5 4v1.5z"/><rect class="frame" x="2.5" y="2.5" width="13" height="13" rx="1.5"/><path class="rows" d="M2.5 5.5h13M5 8.5h8M5 11.5h6"/></svg>
   </button>
-  <button id="implicitBtn" class="tool" aria-pressed="false" title="Also draw dashed arrows for columns named after a table + Id (OwnerId → Owner), without ->">
-    <svg width="14" height="14" class="ico thin" aria-hidden="true"><rect x="1" y="1.5" width="4" height="11" rx="1"/><circle cx="5" cy="9.5" r="1.2" fill="currentColor"/><path d="M6.5 9.5h2V4.5h1.3" stroke-dasharray="1.6 1.4"/><path d="M10.2 2.8 12.6 4.5l-2.4 1.7z" fill="currentColor"/></svg>
+  <button id="implicitBtn" class="tool" aria-pressed="false" title="Also draw arrows for columns named after a table + Id (OwnerId → Owner), without ->">
+    <svg width="14" height="14" class="ico thin" aria-hidden="true"><rect x="1" y="1.5" width="4" height="11" rx="1"/><circle cx="5" cy="9.5" r="1.2" fill="currentColor"/><path d="M6.5 9.5h2V4.5h1.3"/><path d="M10.2 2.8 12.6 4.5l-2.4 1.7z" fill="currentColor"/></svg>
     Implicit
   </button>
   <button id="keysBtn" class="tool" aria-pressed="false" title="Show only key columns: primary keys, foreign keys and the columns they point to">
@@ -180,7 +180,7 @@
           <code class="t-flag">index</code><div>An index on the column, for faster searches and JOINs. <b>index (A, B)</b> on its own line indexes several columns, in that order. <b>index name (A, B)</b> also names it.</div>
           <code class="t-arrow">-&gt; Table</code><div>Foreign key to that table's primary key. The column inherits its type.</div>
           <code class="t-arrow">-&gt; T.Col</code><div>Foreign key to a specific (PK or unique) column.</div>
-          <code class="t-arrow">OwnerId</code><div>With <b>Implicit</b> on (canvas toolbar), a column named table + Id gets a dashed arrow to that table's PK, even without <b>-&gt;</b>. Diagram only: not a foreign key in the SQL.</div>
+          <code class="t-arrow">OwnerId</code><div>With <b>Implicit</b> on (top bar), a column named table + Id gets an arrow to that table's PK, even without <b>-&gt;</b>. Diagram only: not a foreign key in the SQL.</div>
           <code class="t-type">vc</code><div>varchar(128). Other types as-is: int, text, date, datetime, decimal(8,2)…</div>
         </div>
         <div class="hsep"></div>

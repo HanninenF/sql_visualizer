@@ -446,7 +446,6 @@ text { dominant-baseline: central; }
 .dmark { fill: hsl(var(--h) var(--dv-s, 70%) var(--dv-l, 84%)); }
 .dmark ~ .dcell.pk, .dmark ~ .dcell.fk { fill: var(--fg, #1c1812); }
 .edge { fill: none; stroke: var(--edge, #5e5440); stroke-width: 1.4; stroke-linejoin: round; }
-.edge.implicit { stroke-dasharray: 5 4; }
 .ahead { fill: var(--edge, #5e5440); }
 .start { fill: var(--canvas, #fff); stroke: var(--edge, #5e5440); stroke-width: 1.5; }
 .edge-g.hl .edge { stroke: var(--accent, #3a4658); stroke-width: 2; }

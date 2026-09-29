@@ -380,7 +380,7 @@ $('#noteStay').onclick = closeNote;
 $('#notationNote').addEventListener('keydown', e => { if (e.key === 'Escape') closeNote(); });
 applyNotation();
 
-// Implicit arrows: XxxId columns without "->" point to table Xxx (dashed, diagram only)
+// Implicit arrows: XxxId columns without "->" point to table Xxx (diagram only)
 function applyImplicit() {
   const b = $('#implicitBtn');
   b.classList.toggle('on', state.implicit);

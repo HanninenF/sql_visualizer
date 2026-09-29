@@ -174,7 +174,7 @@ function typeProblem(type) {
 }
 
 // With the "Implicit" toggle on, a column without "->" whose name is a table name + Id
-// ("OwnerId", "owner_id", "CategoryId" → Categories) gets a dashed arrow to that table's primary key.
+// ("OwnerId", "owner_id", "CategoryId" → Categories) gets an arrow to that table's primary key.
 // It only affects the diagram: the text, the SQL and the column's type are left as they are.
 function implicitTarget(c, lower) {
   const m = c.name.match(/^(.+?)(?:Id|ID|_id|_ID)$/);
