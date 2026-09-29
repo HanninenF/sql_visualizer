@@ -157,7 +157,7 @@ ta.addEventListener('input', () => {
   if (state.mode === 'text') { state.text = ta.value; state.sqlStale = true; }
   else { state.sql = ta.value; state.textStale = true; }
   update();
-  if (pastedAll) { pastedAll = false; autoLayout(); fit(); }
+  if (pastedAll) { pastedAll = false; posBeforeData = null; autoLayout(); fit(); }
   saveState();
 });
 
@@ -420,11 +420,13 @@ function applyDataView() {
 $('#dataBtn').onclick = () => {
   state.dataView = !state.dataView;
   applyDataView();
+  // no positions to go back to (a new schema was pasted, or another tab): lay out again
+  let restored = false;
   if (state.dataView) posBeforeData = { id: docs.active, pos: structuredClone(pos) };
-  else if (posBeforeData?.id === docs.active) { Object.assign(pos, posBeforeData.pos); saveDoc(); }
+  else if (posBeforeData?.id === docs.active) { Object.assign(pos, posBeforeData.pos); saveDoc(); restored = true; }
   if (!state.dataView) posBeforeData = null;
   drawDiagram();
-  if (state.dataView || boxesOverlap()) autoLayout();
+  if (state.dataView || !restored || boxesOverlap()) autoLayout();
   fit();
   saveState();
 };
