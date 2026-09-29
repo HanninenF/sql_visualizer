@@ -38,10 +38,7 @@ async function openShared() {
     const raw = await squeeze(unb64url(m[1]), new DecompressionStream('deflate-raw'));
     const d = JSON.parse(new TextDecoder().decode(raw));
     const p = Object.fromEntries(Object.entries(d.p ?? {}).map(([k, [x, y]]) => [k, { x, y }]));
-    const doc = d.m === 'sql'
-      ? { mode: 'sql', sql: d.s, text: '', sqlStale: false, textStale: true }
-      : { mode: 'text', text: d.s };
-    newDoc(d.n || 'Shared', d.s, { ...doc, pos: p });
+    newDoc(d.n || 'Shared', d.s, { ...docFields(d.s, d.m === 'sql'), pos: p });
   } catch {
     toast('That link is broken or incomplete.');
   }

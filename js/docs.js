@@ -176,6 +176,27 @@ tabsEl.addEventListener('keydown', e => { // arrow keys move between tabs
 });
 $('#newTabBtn').onclick = () => newDoc('Untitled', '');
 
+// Fields for a new tab holding `src`: SQL opens in the SQL view, anything else in the simple one
+const docFields = (src, sql) => sql
+  ? { mode: 'sql', sql: src, text: '', sqlStale: false, textStale: true }
+  : { mode: 'text', text: src };
+
+// Open a .sql or text file in a new tab, from the button or dropped on the page
+async function openFile(file) {
+  if (!file) return;
+  if (file.size > 1e6) { toast(`${file.name} is too big to be a schema.`); return; }
+  const src = await file.text(), name = file.name.replace(/\.[^.]+$/, '') || 'Untitled';
+  newDoc(name, src, docFields(src, /\.sql$/i.test(file.name) || /\bcreate\s+table\b/i.test(src)));
+}
+$('#openBtn').onclick = () => $('#openFile').click();
+$('#openFile').onchange = e => { openFile(e.target.files[0]); e.target.value = ''; };
+document.addEventListener('dragover', e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); });
+document.addEventListener('drop', e => {
+  if (!e.dataTransfer.files.length) return;
+  e.preventDefault();
+  openFile(e.dataTransfer.files[0]);
+});
+
 // A small confirmation dialog. Resolves true for the OK button; Cancel (the default), Esc
 // or clicking outside resolve false.
 function confirmBox({ title, body, ok, cancel }) {
