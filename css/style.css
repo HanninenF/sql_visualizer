@@ -429,7 +429,7 @@ main { flex: 1; display: flex; min-height: 0; }
 .card-br { right: 12px; bottom: 12px; }
 /* Presentation mode: only the canvas and its zoom controls */
 body.presenting .appbar, body.presenting .tabbar, body.presenting #left, body.presenting #split,
-body.presenting .card-tl, body.presenting #storageNotice { display: none; }
+body.presenting .card-tl, body.presenting #storageNotice, body.presenting #selectHint { display: none; }
 .tool {
   height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 11px 0 9px;
   border: 0; border-radius: 7px; background: transparent; font-weight: 500; white-space: nowrap;

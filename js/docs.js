@@ -225,10 +225,12 @@ function confirmBox({ title, body, ok, cancel }) {
 // "Only saved in this browser": shown when a new diagram is created, until dismissed once
 function showStorageNotice() {
   if (!store.get('storageNoticeSeen', false)) $('#storageNotice').hidden = false;
+  showSelectHint();
 }
 $('#noticeOk').onclick = () => {
   store.set('storageNoticeSeen', true);
   $('#storageNotice').hidden = true;
+  showSelectHint();
 };
 
 renderTabs();

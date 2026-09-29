@@ -181,6 +181,9 @@
         <div class="hsep"></div>
         <div class="help-keys">
           <span>Drag header</span><span>Move a table</span>
+          <span>⇧/⌘ + click a table</span><span>Add it to the selection</span>
+          <span>⇧ + drag canvas</span><span>Select tables in a box</span>
+          <span>Drag a selected table</span><span>Move all selected</span>
           <span>Drag canvas</span><span>Pan</span>
           <span>⌘ + scroll</span><span>Zoom</span>
           <span>Click a row</span><span>Jump to its line</span>
@@ -282,6 +285,11 @@
         <svg width="14" height="14" class="ico" aria-hidden="true"><rect x="1.5" y="2" width="11" height="7.5" rx="1"/><path d="M7 9.5v2.5M4.5 12h5"/></svg>
         <span>Present</span>
       </button>
+    </div>
+
+    <div id="selectHint" class="notice" role="status" hidden>
+      <span>Drag a table by its header to move it. <b>Shift-click</b> tables to select several, or <b>shift-drag</b> the canvas to select an area, then drag any of them to move them together.</span>
+      <button id="selectHintOk" class="btn-outline">Got it</button>
     </div>
 
     <div id="storageNotice" class="notice" role="status" hidden>

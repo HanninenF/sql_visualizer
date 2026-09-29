@@ -425,6 +425,8 @@ const DIAGRAM_CSS = `
 .head { fill: var(--box-head, #fffcf5); }
 .sep, .outline { fill: none; stroke: var(--box-border, #d3cab2); stroke-width: 1; }
 .tbl:hover .outline { stroke: var(--accent, #3a4658); }
+.tbl.sel .outline { stroke: var(--accent, #3a4658); stroke-width: 2; }
+.marquee { fill: var(--accent, #3a4658); fill-opacity: .08; stroke: var(--accent, #3a4658); stroke-width: 1; stroke-dasharray: 4 3; }
 text { dominant-baseline: central; }
 .title { font: ${FONTS.head}; letter-spacing: -.005em; fill: var(--box-head-fg, #1c1812); }
 .row .hit { fill: transparent; }
@@ -584,7 +586,7 @@ function dataBoxBody(t, b, interactive) {
 
 function boxMarkup(t, b, interactive) {
   const { w, h } = b, r = 9;
-  let s = `<g class="tbl" data-t="${esc(t.name)}" transform="translate(${b.x},${b.y})">`;
+  let s = `<g class="tbl${interactive && selected.has(t.name) ? ' sel' : ''}" data-t="${esc(t.name)}" transform="translate(${b.x},${b.y})">`;
   s += `<rect class="box" width="${w}" height="${h}" rx="${r}"/>`;
   s += `<path class="head" d="M0,${r}A${r},${r} 0 0 1 ${r},0H${w - r}A${r},${r} 0 0 1 ${w},${r}V${HEAD_H}H0Z"/>`;
   s += `<line class="sep" x1="0" y1="${HEAD_H + .5}" x2="${w}" y2="${HEAD_H + .5}"/>`;
@@ -722,6 +724,7 @@ function drawDiagram() {
   vp.innerHTML = diagramMarkup(true);
   $('#emptyState').hidden = model.tables.length > 0;
   if (hoverTable) highlightTable(hoverTable);
+  showSelectHint();
   if (revealName) { reveal(revealName); revealName = null; }
 }
 
@@ -823,16 +826,43 @@ function fit(maxZoom = 1.25) {
   applyView();
 }
 
+// Selected tables move together. Shift/⌘-click toggles a table; shift-drag the canvas
+// selects every table the box touches; a plain click (or Escape) clears the selection.
+let selected = new Set();
+function setSelected(names) {
+  selected = new Set(names);
+  vp.querySelectorAll('.tbl').forEach(g => g.classList.toggle('sel', selected.has(g.dataset.t)));
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && selected.size) setSelected([]); });
+
+// One-time hint about moving and selecting tables, once there's more than one table
+function showSelectHint() {
+  $('#selectHint').hidden = store.get('selectHintSeen', false) || model.tables.length < 2 || !$('#storageNotice').hidden;
+}
+$('#selectHintOk').onclick = () => { store.set('selectHintSeen', true); $('#selectHint').hidden = true; };
+
 let drag = null, frame = 0;
 svg.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
   closeMenus();
-  const g = e.target.closest('.tbl');
+  const g = e.target.closest('.tbl'), multi = e.shiftKey || e.metaKey || e.ctrlKey;
   svg.setPointerCapture(e.pointerId);
-  if (g) {
-    const w = toWorld(e), p = pos[g.dataset.t];
-    drag = { kind: 'box', name: g.dataset.t, dx: w.x - p.x, dy: w.y - p.y, sx: e.clientX, sy: e.clientY,
-             moved: false, line: e.target.closest('[data-line]')?.dataset.line ?? null };
+  if (g && multi) {
+    const n = g.dataset.t, s = new Set(selected);
+    s.has(n) ? s.delete(n) : s.add(n);
+    setSelected(s);
+    drag = { kind: 'none' };
+  } else if (g) {
+    const w = toWorld(e), name = g.dataset.t;
+    if (!selected.has(name)) setSelected([]);
+    const names = selected.has(name) ? [...selected].filter(n => pos[n]) : [name];
+    drag = { kind: 'box', name, w, start: Object.fromEntries(names.map(n => [n, { ...pos[n] }])),
+             sx: e.clientX, sy: e.clientY, moved: false, line: e.target.closest('[data-line]')?.dataset.line ?? null };
+  } else if (multi) {
+    const m = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    m.setAttribute('class', 'marquee');
+    svg.appendChild(m);
+    drag = { kind: 'marquee', w: toWorld(e), el: m, base: new Set(selected) };
   } else {
     drag = { kind: 'pan', sx: e.clientX, sy: e.clientY, tx: view.tx, ty: view.ty };
     svg.classList.add('panning');
@@ -841,16 +871,28 @@ svg.addEventListener('pointerdown', e => {
 svg.addEventListener('pointermove', e => {
   if (!drag) return;
   if (drag.kind === 'pan') {
+    if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) >= 4) drag.moved = true;
     view.tx = drag.tx + e.clientX - drag.sx;
     view.ty = drag.ty + e.clientY - drag.sy;
     applyView();
     return;
   }
+  if (drag.kind === 'marquee') {
+    const a = drag.w, b = toWorld(e);
+    const x0 = Math.min(a.x, b.x), y0 = Math.min(a.y, b.y), x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y);
+    const at = { x: x0 * view.s + view.tx, y: y0 * view.s + view.ty, width: (x1 - x0) * view.s, height: (y1 - y0) * view.s };
+    for (const k in at) drag.el.setAttribute(k, at[k]);
+    const hit = [...geometry.boxes].filter(([, r]) => r.x < x1 && r.x + r.w > x0 && r.y < y1 && r.y + r.h > y0).map(([t]) => t.name);
+    setSelected([...drag.base, ...hit]);
+    return;
+  }
+  if (drag.kind !== 'box') return;
   if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
   if (!drag.moved) { histBegin('move'); svg.classList.add('dragging'); }
   drag.moved = true;
   const w = toWorld(e);
-  pos[drag.name] = { x: Math.round((w.x - drag.dx) / 10) * 10, y: Math.round((w.y - drag.dy) / 10) * 10 };
+  const dx = Math.round((w.x - drag.w.x) / 10) * 10, dy = Math.round((w.y - drag.w.y) / 10) * 10;
+  for (const [n, p] of Object.entries(drag.start)) pos[n] = { x: p.x + dx, y: p.y + dy };
   if (!frame) frame = requestAnimationFrame(() => { frame = 0; drawDiagram(); });
 });
 function endDrag() {
@@ -864,7 +906,8 @@ function endDrag() {
         if (t) selectLine(t.line);
       }
     }
-  }
+  } else if (drag.kind === 'marquee') drag.el.remove();
+  else if (drag.kind === 'pan' && !drag.moved) setSelected([]);
   svg.classList.remove('panning', 'dragging');
   drag = null;
 }
