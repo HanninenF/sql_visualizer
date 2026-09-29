@@ -76,9 +76,9 @@ function uniqueName(base) {
 }
 
 // Open a new diagram in a tab right after the current one
-function newDoc(name, text) {
+function newDoc(name, text, fields = {}) {
   const id = newDocId();
-  persist(docKey(id), { ...DOC_DEFAULTS, text, base: text, pos: {} });
+  persist(docKey(id), { ...DOC_DEFAULTS, text, base: text, pos: {}, ...fields });
   const i = docs.list.findIndex(d => d.id === docs.active);
   docs.list.splice(i + 1, 0, { id, name: uniqueName(name) });
   switchDoc(id);
