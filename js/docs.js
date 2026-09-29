@@ -67,9 +67,11 @@ function switchDoc(id) {
 }
 
 // A name not used by another tab: "Untitled", "Untitled 2", …
+// A taken "Untitled 2" continues the series ("Untitled 3") rather than becoming "Untitled 2 2".
 function uniqueName(base) {
   const used = new Set(docs.list.map(d => d.name));
   if (!used.has(base)) return base;
+  base = base.replace(/ \d{1,3}$/, ''); // short numbers only, so "Sales 2024" stays itself
   let n = 2;
   while (used.has(`${base} ${n}`)) n++;
   return `${base} ${n}`;
