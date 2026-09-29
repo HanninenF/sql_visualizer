@@ -59,6 +59,9 @@ function switchDoc(id) {
   hist.redo = h?.redo ?? [];
   readDoc(id);
   prevNames = [];
+  openGrids.clear(); // sample grids belong to the diagram they were opened in
+  gridAt.clear();
+  sampleHl = null;
   setHelp(false);
   loadEditor();
   if (docView) { Object.assign(view, docView); applyView(); } else fit();

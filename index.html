@@ -68,6 +68,7 @@
       <div class="menu-sep"></div>
       <div class="menu-label">Schema</div>
       <button id="sqlBtn" role="menuitem"><span>MariaDB script</span><span class="ext">.sql</span></button>
+      <button id="sqlDataBtn" role="menuitem"><span>MariaDB script + sample data</span><span class="ext">.sql</span></button>
       <button id="copySqlBtn" role="menuitem"><span>Copy SQL</span><span class="ext">⌘⇧C</span></button>
       <div class="menu-sep"></div>
       <div class="menu-label">Share</div>
@@ -213,6 +214,8 @@
       <g id="vp"></g>
     </svg>
 
+    <div id="gridLayer"><div id="gridWorld"></div></div>
+
     <div id="emptyState" class="empty" hidden>
       <div class="empty-title">No tables yet</div>
       <div>Type a table name in the editor, or use <b>New table</b>.</div>
@@ -237,6 +240,11 @@
       <button id="keysBtn" class="tool" aria-pressed="false" title="Show only key columns: primary keys, foreign keys and the columns they point to">
         <svg width="14" height="14" class="ico thin" aria-hidden="true"><circle cx="4.5" cy="7" r="2.5"/><path d="M7 7h5.5M10.5 7v2M12.5 7v1.5"/></svg>
         Keys only
+      </button>
+      <div class="vsep sm"></div>
+      <button id="sampleBtn" class="tool" aria-pressed="false" title="Sample data: click a table to see a few made-up rows">
+        <svg width="14" height="14" class="ico thin" aria-hidden="true"><rect x="1.5" y="2" width="11" height="10" rx="1.5"/><path d="M1.5 5.5h11M1.5 8.8h11M5.5 5.5V12"/></svg>
+        Sample data
       </button>
     </div>
 
@@ -323,6 +331,7 @@
 <script src="js/sql.js"></script>
 <script src="js/diagram.js"></script>
 <script src="js/layout.js"></script>
+<script src="js/sample.js"></script>
 <script src="js/colorSchemes.js"></script>
 <script src="js/app.js"></script>
 <script src="js/history.js"></script>

@@ -488,6 +488,12 @@ $('#sqlBtn').onclick = () => {
   download(new Blob([currentSql()], { type: 'text/sql' }), 'schema.sql');
   toast('Saved schema.sql');
 };
+$('#sqlDataBtn').onclick = () => {
+  closeMenus();
+  const name = exportName('sql');
+  download(new Blob([currentSql() + '\n' + sampleInserts(model.tables)], { type: 'text/sql' }), name);
+  toast(`Saved ${name} with sample data`);
+};
 $('#copySqlBtn').onclick = copySql;
 document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'c') { e.preventDefault(); copySql(); }

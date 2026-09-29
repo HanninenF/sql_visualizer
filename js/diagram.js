@@ -556,6 +556,7 @@ function drawDiagram() {
   $('#emptyState').hidden = model.tables.length > 0;
   if (hoverTable) highlightTable(hoverTable);
   if (revealName) { reveal(revealName); revealName = null; }
+  renderGrids();
 }
 
 // Hovering a table highlights its arrows (drawn on top); hovering an arrow highlights it
@@ -591,6 +592,7 @@ function applyView() {
   svg.style.backgroundSize = `${20 * view.s}px ${20 * view.s}px`;
   svg.style.backgroundPosition = `${view.tx}px ${view.ty}px`;
   $('#zoomLabel').textContent = Math.round(view.s * 100) + '%';
+  placeGrids();
   saveState(); // each diagram remembers its pan/zoom (the save is debounced)
 }
 function toWorld(e) {
@@ -687,10 +689,13 @@ function endDrag() {
   if (!drag) return;
   if (drag.kind === 'box') {
     if (drag.moved) { saveDoc(); histCommit(); }
-    else if (drag.line) selectLine(+drag.line);
     else {
-      const t = model.tables.find(t => t.name === drag.name);
-      if (t) selectLine(t.line);
+      if (drag.line) selectLine(+drag.line);
+      else {
+        const t = model.tables.find(t => t.name === drag.name);
+        if (t) selectLine(t.line);
+      }
+      tableClicked(drag.name);
     }
   }
   svg.classList.remove('panning', 'dragging');

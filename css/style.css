@@ -422,6 +422,33 @@ main { flex: 1; display: flex; min-height: 0; }
 }
 .card-tl { top: 12px; left: 12px; }
 .card-br { right: 12px; bottom: 12px; }
+/* Sample data grids: an HTML layer over the canvas that pans and zooms with it */
+#gridLayer { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+#gridWorld { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.sgrid {
+  position: absolute; pointer-events: auto; background: var(--box-bg); color: var(--fg);
+  border: 1px solid var(--box-border); border-radius: 9px; box-shadow: var(--shadow); overflow: hidden;
+}
+.sg-head {
+  display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 10px; cursor: grab;
+  font-weight: 600; font-size: 12px; border-bottom: 1px solid var(--box-border); background: var(--box-head);
+}
+.sg-head span { flex: 1; }
+.sg-x { border: 0; background: transparent; color: var(--muted); font-size: 15px; line-height: 1; padding: 0 4px; border-radius: 4px; }
+.sg-x:hover { background: var(--hover); color: var(--fg); }
+.sgrid table { border-collapse: collapse; font: 11.5px var(--mono); }
+.sgrid th { font: 600 11px var(--font); color: var(--muted); text-align: left; padding: 5px 10px 3px; white-space: nowrap; }
+.sgrid td {
+  padding: 3px 10px; white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+  border-top: 1px solid var(--line); cursor: pointer;
+}
+.sgrid td.pk { font-weight: 600; color: var(--accent); }
+.sgrid td.fk { color: var(--tok-ref); text-decoration: underline dotted; text-underline-offset: 2px; }
+.sgrid td.null { color: var(--faint); font-style: italic; }
+.sgrid td.sg-none { color: var(--faint); font-style: italic; cursor: default; }
+.sgrid tr.hl td { background: var(--accent-soft); font-weight: 600; }
+.sgrid td.hl { background: var(--accent); color: var(--accent-fg); }
+
 /* Presentation mode: only the canvas and its zoom controls */
 body.presenting .appbar, body.presenting .tabbar, body.presenting #left, body.presenting #split,
 body.presenting .card-tl, body.presenting #storageNotice { display: none; }
