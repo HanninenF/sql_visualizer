@@ -419,8 +419,7 @@ class MinHeap {
 
 // ─── Diagram rendering ───────────────────────────────────────────────────────
 
-// Colors come from the page's theme variables. A standalone export has no such
-// variables, so it falls back to the light palette (print-ready).
+// Colors come from the page's theme variables (themes.js); an export sets them itself.
 const DIAGRAM_CSS = `
 .box { fill: var(--box-bg, #fffcf5); filter: var(--box-shadow, none); }
 .head { fill: var(--box-head, #fffcf5); }
@@ -462,7 +461,6 @@ text { dominant-baseline: central; }
 .edge-g.hl .sym, .edge-g.hl .sym-o { stroke: var(--accent, #3a4658); stroke-width: 2; }
 .edge-g.hl .mult { fill: var(--accent, #3a4658); font-weight: 600; }
 .edge-hit { fill: none; stroke: transparent; stroke-width: 9; }
-.style-filled { --box-head: var(--accent, #3a4658); --box-head-fg: var(--accent-fg, #faf6ee); --box-border: var(--accent, #3a4658); }
 `;
 
 const svg = $('#canvas'), vp = $('#vp');
@@ -896,23 +894,6 @@ function boxesOverlap() {
     p.x < q.x + q.w && p.x + p.w > q.x && p.y < q.y + q.h && p.y + p.h > q.y));
 }
 
-// ─── Diagram style ───────────────────────────────────────────────────────────
-
-function applyStyle() {
-  if (state.style !== 'filled') state.style = 'classic'; // "green" from older versions → classic/filled
-  svg.classList.toggle('style-filled', state.style === 'filled');
-  const filled = state.style === 'filled', btn = $('#styleBtn');
-  btn.classList.toggle('filled', filled);
-  btn.setAttribute('aria-pressed', filled);
-  btn.title = filled ? 'Diagram style: Filled headers (click for Classic)' : 'Diagram style: Classic (click for filled headers)';
-  btn.setAttribute('aria-label', btn.title);
-}
-$('#styleBtn').addEventListener('click', () => {
-  state.style = state.style === 'filled' ? 'classic' : 'filled';
-  applyStyle();
-  saveState();
-});
-
 // ─── Export ──────────────────────────────────────────────────────────────────
 
 // The fonts, embedded, so an exported SVG/PNG looks the same without Geist installed.
@@ -941,6 +922,9 @@ function embeddedFontCss() {
   return fontCssPromise;
 }
 
+// An export uses the light variant of the chosen theme on white (print-ready)
+const exportVars = () => Object.entries({ ...themeVars(themeKey(), false), canvas: '#fff' }).map(([k, v]) => `--${k}: ${v};`).join(' ');
+
 async function exportMarkup() {
   const bb = contentBounds(30);
   if (!bb) return null;
@@ -948,7 +932,7 @@ async function exportMarkup() {
   return {
     bb,
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${bb.w}" height="${bb.h}" viewBox="${bb.x} ${bb.y} ${bb.w} ${bb.h}"` +
-      ` class="${state.style === 'filled' ? 'style-filled' : ''}"><style>${fonts}${DIAGRAM_CSS}</style>` +
+      `><style>${fonts}svg { ${exportVars()} }${DIAGRAM_CSS}</style>` +
       `<rect x="${bb.x}" y="${bb.y}" width="${bb.w}" height="${bb.h}" fill="#fff"/>${diagramMarkup(false)}</svg>`,
   };
 }

@@ -164,11 +164,11 @@ ta.addEventListener('input', () => {
 // ─── State ───────────────────────────────────────────────────────────────────
 
 // Everything is saved in the browser's localStorage:
-//   sqlviz.settings   preferences shared by all tabs (style, colours, text size, notation, editor width)
+//   sqlviz.settings   preferences shared by all tabs (theme, text size, notation, editor width)
 //   sqlviz.docs       the tabs: { list: [{ id, name }], active }
 //   sqlviz.doc.<id>   one diagram: text, SQL, mode, box positions and the view (pan/zoom)
 // `state` holds the preferences plus the active diagram's fields; `pos` its box positions.
-const SETTINGS = ['style', 'colors', 'fontSize', 'wrap', 'notation', 'implicit', 'keysOnly', 'dataView', 'panel', 'leftW'];
+const SETTINGS = ['colors', 'fontSize', 'wrap', 'notation', 'implicit', 'keysOnly', 'dataView', 'panel', 'leftW'];
 // base: the text the diagram was created with (an example, or empty), to tell whether it has changed
 const DOC_DEFAULTS = { text: '', sql: '', mode: 'text', textStale: false, sqlStale: true, base: null };
 const docKey = id => 'doc.' + id;
@@ -192,7 +192,7 @@ if (!docs?.list?.length) {
 if (!docs.list.some(d => d.id === docs.active)) docs.active = docs.list[0].id;
 
 const state = Object.assign({
-  style: 'classic', colors: 'bleak', fontSize: 13, wrap: true, notation: 'arrows', implicit: false, keysOnly: false, dataView: false, panel: 'mid', leftW: null, ...DOC_DEFAULTS,
+  colors: 'bleak', fontSize: 13, wrap: true, notation: 'arrows', implicit: false, keysOnly: false, dataView: false, panel: 'mid', leftW: null, ...DOC_DEFAULTS,
 }, store.get('settings', {}));
 let pos = {};
 let docView = null; // the active diagram's saved pan/zoom, if any
@@ -295,7 +295,7 @@ function applyTheme(theme) {
   if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
   else delete document.documentElement.dataset.theme;
   $('#themeBtn').title = isDark() ? 'Switch to light mode' : 'Switch to dark mode';
-  applyColorScheme(); // each text colour scheme has a light and a dark variant
+  applyPalette(); // each theme has a light and a dark variant
 }
 applyTheme(store.get('theme', 'auto'));
 systemDark.addEventListener('change', () => applyTheme(store.get('theme', 'auto')));
@@ -433,7 +433,7 @@ $('#dataBtn').onclick = () => {
 applyDataView();
 
 // Menus: Export (app bar) and Text colours (editor header)
-const MENUS = [['#exportBtn', '#exportMenu'], ['#schemeBtn', '#schemeMenu']];
+const MENUS = [['#exportBtn', '#exportMenu'], ['#schemeBtn', '#schemeMenu'], ['#themeMenuBtn', '#themeMenu']];
 function closeMenus() {
   for (const [btn, menu] of MENUS) {
     $(menu).hidden = true;
@@ -485,14 +485,6 @@ $('#sizeUp').onclick = e => { e.stopPropagation(); stepFontSize(1); };
 applyFontSize();
 applyWrap();
 
-$('#schemeList').addEventListener('click', e => {
-  const b = e.target.closest('[data-scheme]');
-  if (!b) return;
-  state.colors = b.dataset.scheme;
-  applyColorScheme();
-  saveState();
-  closeMenus();
-});
 document.addEventListener('pointerdown', e => { if (!e.target.closest('.menu-wrap')) closeMenus(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenus(); });
 
@@ -608,7 +600,6 @@ window.addEventListener('resize', () => { if (presentView) fit(2); });
 // ─── Start ───────────────────────────────────────────────────────────────────
 // Box widths are measured with the Geist fonts, so wait for them (at most 1.5s).
 
-applyStyle();
 const fontsLoaded = Promise.all(Object.values(FONTS).map(f => document.fonts.load(f)));
 Promise.race([fontsLoaded, new Promise(r => setTimeout(r, 1500))]).then(() => {
   widthCache.clear();
