@@ -1,8 +1,9 @@
 'use strict';
 
 // ─── Share links ─────────────────────────────────────────────────────────────
-// The whole diagram (name, text or SQL, box positions) is compressed into the URL's
-// #hash, so nothing is stored on a server. Opening such a link adds it as a new tab.
+// The diagram (name, text or SQL) is compressed into the URL's #hash, so nothing is
+// stored on a server. Opening such a link adds it as a new tab, laid out automatically
+// for the viewer's screen (box positions are not in the link).
 
 const b64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const unb64url = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
@@ -13,7 +14,6 @@ async function shareLink() {
     n: activeDoc().name,
     m: state.mode,
     s: state.mode === 'text' ? state.text : state.sql,
-    p: Object.fromEntries(Object.entries(pos).map(([k, p]) => [k, [p.x, p.y]])),
   };
   const z = await squeeze(new TextEncoder().encode(JSON.stringify(d)), new CompressionStream('deflate-raw'));
   return location.href.split('#')[0] + '#d=' + b64url(z);
@@ -37,8 +37,7 @@ async function openShared() {
   try {
     const raw = await squeeze(unb64url(m[1]), new DecompressionStream('deflate-raw'));
     const d = JSON.parse(new TextDecoder().decode(raw));
-    const p = Object.fromEntries(Object.entries(d.p ?? {}).map(([k, [x, y]]) => [k, { x, y }]));
-    newDoc(d.n || 'Shared', d.s, { ...docFields(d.s, d.m === 'sql'), pos: p });
+    newDoc(d.n || 'Shared', d.s, docFields(d.s, d.m === 'sql')); // no positions: auto layout, then fit
   } catch {
     toast('That link is broken or incomplete.');
   }

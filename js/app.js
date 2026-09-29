@@ -146,11 +146,16 @@ ta.addEventListener('keydown', e => {
   }
 });
 ta.addEventListener('scroll', syncScroll);
+// A paste that replaces everything (all selected, or the editor empty) is a new schema:
+// lay it out from scratch instead of keeping the old positions
+let pastedAll = false;
+ta.addEventListener('paste', () => { pastedAll = ta.selectionStart === 0 && ta.selectionEnd === ta.value.length; });
 ta.addEventListener('input', () => {
   histTyping();
   if (state.mode === 'text') { state.text = ta.value; state.sqlStale = true; }
   else { state.sql = ta.value; state.textStale = true; }
   update();
+  if (pastedAll) { pastedAll = false; autoLayout(); fit(); }
   saveState();
 });
 
