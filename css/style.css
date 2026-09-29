@@ -192,13 +192,7 @@ body.panel-collapsed #left, body.panel-collapsed #split { display: none; }
   position: relative; z-index: 20;
 }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.logo {
-  width: 24px; height: 24px; border-radius: 6px; background: var(--accent); flex: none;
-  display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 0 5px;
-}
-.logo i { display: block; height: 2px; border-radius: 1px; background: var(--accent-fg); }
-.logo i:nth-child(2) { width: 70%; opacity: .7; }
-.logo i:nth-child(3) { width: 85%; opacity: .7; }
+.logo { width: 32px; height: 32px; flex: none; display: block; }
 .title { font-weight: 600; font-size: 14.5px; letter-spacing: -.01em; white-space: nowrap; }
 
 .menu-wrap { position: relative; }
