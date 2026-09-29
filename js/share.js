@@ -1,7 +1,7 @@
 'use strict';
 
 // ─── Share links ─────────────────────────────────────────────────────────────
-// The diagram (name, text or SQL) is compressed into the URL's #hash, so nothing is
+// The diagram (name and schema) is compressed into the URL's #hash, so nothing is
 // stored on a server. Opening such a link adds it as a new tab, laid out automatically
 // for the viewer's screen (box positions are not in the link).
 
@@ -9,12 +9,17 @@ const b64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').
 const unb64url = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 const squeeze = (bytes, how) => new Response(new Blob([bytes]).stream().pipeThrough(how)).arrayBuffer().then(b => new Uint8Array(b));
 
+// The schema always goes as Simple syntax: SQL is several times longer (a 14 KB script
+// with comments became a 650 character link instead of 5800). SQL comments are left out.
+function shareText() {
+  if (state.mode === 'text') return state.text;
+  const r = parseSQL(state.sql);
+  resolve(r.tables);
+  return genText(r.tables, []);
+}
+
 async function shareLink() {
-  const d = {
-    n: activeDoc().name,
-    m: state.mode,
-    s: state.mode === 'text' ? state.text : state.sql,
-  };
+  const d = { n: activeDoc().name, m: 'text', s: shareText() };
   const z = await squeeze(new TextEncoder().encode(JSON.stringify(d)), new CompressionStream('deflate-raw'));
   return location.href.split('#')[0] + '#d=' + b64url(z);
 }
