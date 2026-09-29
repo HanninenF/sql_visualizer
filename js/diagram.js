@@ -794,19 +794,36 @@ async function exportSvg() {
   download(new Blob([m.svg], { type: 'image/svg+xml' }), name);
   toast(`Saved ${name}`);
 }
-async function exportPng() {
+// The diagram as a PNG at 2× (for crisp slides)
+async function pngBlob() {
   const m = await exportMarkup();
-  if (!m) return toast('Nothing to export yet');
+  if (!m) return null;
   const img = new Image();
-  img.onload = () => {
-    const k = 2, c = document.createElement('canvas');
-    c.width = m.bb.w * k;
-    c.height = m.bb.h * k;
-    const ctx = c.getContext('2d');
-    ctx.scale(k, k);
-    ctx.drawImage(img, 0, 0);
-    const name = exportName('png');
-    c.toBlob(b => { download(b, name); toast(`Saved ${name}`); });
-  };
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(m.svg);
+  await img.decode();
+  const k = 2, c = document.createElement('canvas');
+  c.width = m.bb.w * k;
+  c.height = m.bb.h * k;
+  const ctx = c.getContext('2d');
+  ctx.scale(k, k);
+  ctx.drawImage(img, 0, 0);
+  return new Promise(r => c.toBlob(r, 'image/png'));
+}
+async function exportPng() {
+  const b = await pngBlob();
+  if (!b) return toast('Nothing to export yet');
+  const name = exportName('png');
+  download(b, name);
+  toast(`Saved ${name}`);
+}
+// Copy the PNG to the clipboard, for pasting into slides. The blob is handed over as a
+// promise so Safari still counts it as part of the click.
+async function copyImage() {
+  if (!model.tables.length) return toast('Nothing to copy yet');
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob() })]);
+    toast('Image copied to clipboard');
+  } catch {
+    toast('Could not copy. Use Export → PNG image instead.');
+  }
 }

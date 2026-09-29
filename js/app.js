@@ -467,6 +467,7 @@ async function copySql() {
 }
 $('#svgBtn').onclick = () => { closeMenus(); exportSvg(); };
 $('#pngBtn').onclick = () => { closeMenus(); exportPng(); };
+$('#copyImgBtn').onclick = () => { closeMenus(); copyImage(); };
 $('#sqlBtn').onclick = () => {
   closeMenus();
   download(new Blob([currentSql()], { type: 'text/sql' }), 'schema.sql');
