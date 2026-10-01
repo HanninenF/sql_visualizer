@@ -459,18 +459,47 @@ applyDataView();
 const MENUS = [['#exportBtn', '#exportMenu'], ['#schemeBtn', '#schemeMenu'], ['#themeMenuBtn', '#themeMenu'], ['#notationBtn', '#notationMenu']];
 function closeMenus() {
   for (const [btn, menu] of MENUS) {
+    if ($(menu).contains(document.activeElement)) $(btn).focus(); // e.g. an item picked with Enter
     $(menu).hidden = true;
     $(btn).setAttribute('aria-expanded', 'false');
   }
 }
+const menuItems = menu => [...$(menu).querySelectorAll('button:not(:disabled)')];
+function openMenu(btn, menu, focus = null) {
+  closeMenus();
+  $(menu).hidden = false;
+  $(btn).setAttribute('aria-expanded', 'true');
+  const items = menuItems(menu);
+  if (focus === 'first') (items.find(b => b.getAttribute('aria-checked') === 'true') ?? items[0])?.focus();
+  if (focus === 'last') items.at(-1)?.focus();
+}
+// Keyboard: ↓/↑ on the button opens the menu, then ↓ ↑ Home End move through it,
+// Esc closes it (back to the button) and Tab leaves it
 for (const [btn, menu] of MENUS) {
   $(btn).onclick = e => {
     e.stopPropagation();
-    const open = $(menu).hidden;
-    closeMenus();
-    $(menu).hidden = !open;
-    $(btn).setAttribute('aria-expanded', String(open));
+    if ($(menu).hidden) openMenu(btn, menu, e.detail === 0 ? 'first' : null); // detail 0: Enter or Space
+    else closeMenus();
   };
+  $(btn).addEventListener('keydown', e => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    openMenu(btn, menu, e.key === 'ArrowDown' ? 'first' : 'last');
+  });
+  $(menu).addEventListener('keydown', e => {
+    const items = menuItems(menu), i = items.indexOf(document.activeElement);
+    const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: items.length - 1 }[e.key];
+    if (to !== undefined) {
+      e.preventDefault();
+      items[(to + items.length) % items.length]?.focus();
+    } else if (e.key === 'Escape') {
+      e.stopPropagation();
+      closeMenus();
+    } else if (e.key === 'Tab') {
+      $(menu).hidden = true;
+      $(btn).setAttribute('aria-expanded', 'false');
+    }
+  });
 }
 // Editor text size (the Text menu stays open while stepping, so you see the change)
 const FONT_MIN = 10, FONT_MAX = 24;
