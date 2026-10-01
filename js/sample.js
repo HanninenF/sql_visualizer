@@ -127,8 +127,12 @@ const isNumeric = c => { const ti = typeInfo(c); return ti.int || ti.bool || ti.
 const dateStr = (y0, y1, key) => `${between(y0, y1, key + 'y')}-${pad2(between(1, 12, key + 'm'))}-${pad2(between(1, 28, key + 'd'))}`;
 const timeStr = key => `${pad2(between(8, 17, key + 'h'))}:${pad2(between(0, 3, key + 'n') * 15)}:00`;
 
-// One value (a string, or null) for column c of table t in row i
+// One value (a string, or null) for column c of table t in row i, within the column's length
 function sampleValue(t, c, i, sv, person) {
+  const s = anyLengthValue(t, c, i, sv, person), n = typeInfo(c).len;
+  return s != null && n ? s.slice(0, n) : s;
+}
+function anyLengthValue(t, c, i, sv, person) {
   const key = `${t.name}.${c.name}.${i}`, L = sv ? 1 : 0, ti = typeInfo(c);
   const kind = columnKind(c);
   const int = (lo, hi) => String(between(lo, hi, key));
@@ -191,7 +195,7 @@ function sampleValue(t, c, i, sv, person) {
     default:
       s = `${c.name} ${i + 1}`;
   }
-  return ti.len ? s.slice(0, ti.len) : s;
+  return s;
 }
 
 // Sample rows for every table: Map table → [{ values: Map column → string | null }]
@@ -218,7 +222,12 @@ function sampleData(tables) {
       const seen = new Set();
       rows.forEach((r, i) => {
         let v = r.values.get(c);
-        if (v != null && seen.has(v)) r.values.set(c, v = typeInfo(c).int ? String(1000 + i) : `${v} ${i + 1}`);
+        if (v != null && seen.has(v)) {
+          const { int, len } = typeInfo(c), sfx = ` ${i + 1}`;
+          // shortened to make room for the number, so it still fits in the column
+          v = int ? String(1000 + i) : len ? (v.slice(0, Math.max(0, len - sfx.length)) + sfx).slice(-len) : v + sfx;
+          r.values.set(c, v);
+        }
         seen.add(v);
       });
     }

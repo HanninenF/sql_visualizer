@@ -1,8 +1,8 @@
 'use strict';
 
 // ─── Layout: where the boxes go ──────────────────────────────────────────────
-// One cost function drives both placing a single new table (the others stay put)
-// and "Auto layout" (place the tables one by one, then improve each in turn).
+// Placing a single new table (the others stay put) uses a cost function; "Auto layout"
+// arranges whole groups in columns instead (below).
 // Cost of a spot = estimated length of its arrows
 //                + a big penalty for arrows through boxes (or the box covering arrows)
 //                + a penalty for crossing other arrows, and for tiny jogs (rows almost level)
@@ -68,8 +68,7 @@ function bboxOf(rects) {
 
 // Best free spot for table t, given the boxes already placed (Map table → rect).
 // anchor: where an unconnected table should go (defaults to the middle of what's placed).
-// current: a spot to consider as well (used when improving an existing layout).
-function bestSpot(t, placed, dims, edges, anchor = null, current = null) {
+function bestSpot(t, placed, dims, edges, anchor = null) {
   const { w, h } = dims.get(t);
   const mine = edges.filter(e => (e.from === t && placed.has(e.to)) || (e.to === t && placed.has(e.from)));
   const otherSegs = edges
@@ -106,7 +105,7 @@ function bestSpot(t, placed, dims, edges, anchor = null, current = null) {
     return c + pull * (Math.abs(m.x - pullTo.x) + Math.abs(m.y - pullTo.y)) + LAYOUT.GROW * grow;
   };
 
-  let best = current ? { x: current.x, y: current.y, cost: cost(current.x, current.y) } : { cost: Infinity };
+  let best = { cost: Infinity };
   const around = linked.length ? bboxOf(linked) : anchor ? { x: anchor.x, y: anchor.y, w: 0, h: 0 } : bboxOf(rects);
   // besides the grid, try the heights where an arrow's two rows are exactly level (a straight arrow)
   const levelYs = mine.map(e => e.from === t ? placed.get(e.to).y + e.ty - e.fy : placed.get(e.from).y + e.fy - e.ty);

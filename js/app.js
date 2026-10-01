@@ -25,13 +25,24 @@ function hlTextLine(line) {
 const SQL_KW = new Set(`CREATE TABLE PRIMARY KEY FOREIGN REFERENCES NOT NULL AUTO_INCREMENT UNIQUE DROP IF EXISTS SET
 ALTER ADD CONSTRAINT DEFAULT INDEX ON DELETE UPDATE CASCADE COLUMN ENGINE CHARSET COLLATE CHECK`.split(/\s+/));
 const SQL_TYPES = /^(TINYINT|SMALLINT|MEDIUMINT|INT|INTEGER|BIGINT|DECIMAL|NUMERIC|FLOAT|DOUBLE|BIT|BOOL|BOOLEAN|CHAR|VARCHAR|TEXT|TINYTEXT|MEDIUMTEXT|LONGTEXT|BLOB|DATE|DATETIME|TIMESTAMP|TIME|YEAR|ENUM|SET|JSON|UNSIGNED)$/i;
-function hlSqlLine(line) {
+// st carries a /* comment */ that is still open over to the next line
+function hlSqlLine(line, st = {}) {
   let out = '', last = 0;
-  const re = /(--.*$|#.*$)|('(?:[^'\\]|\\.|'')*'?)|(`[^`]*`?)|([\p{L}_][\p{L}\p{N}_$]*)/gu;
+  if (st.inComment) {
+    const end = line.indexOf('*/');
+    last = end < 0 ? line.length : end + 2;
+    out = `<span class="h-com">${esc(line.slice(0, last))}</span>`;
+    if (end < 0) return out;
+    st.inComment = false;
+  }
+  const re = /(--.*$|#.*$|\/\*.*?(?:\*\/|$))|('(?:[^'\\]|\\.|'')*'?|"(?:[^"\\]|\\.|"")*"?)|(`[^`]*`?)|([\p{L}_][\p{L}\p{N}_$]*)/gu;
+  re.lastIndex = last; // matchAll starts from here
   for (const m of line.matchAll(re)) {
     out += esc(line.slice(last, m.index));
-    if (m[1]) out += `<span class="h-com">${esc(m[1])}</span>`;
-    else if (m[2]) out += `<span class="h-str">${esc(m[2])}</span>`;
+    if (m[1]) {
+      out += `<span class="h-com">${esc(m[1])}</span>`;
+      if (m[1].startsWith('/*') && !(m[1].length >= 4 && m[1].endsWith('*/'))) st.inComment = true;
+    } else if (m[2]) out += `<span class="h-str">${esc(m[2])}</span>`;
     else if (m[4] && SQL_KW.has(m[4].toUpperCase())) out += `<span class="h-kw">${esc(m[4])}</span>`;
     else if (m[4] && SQL_TYPES.test(m[4])) out += `<span class="h-type">${esc(m[4])}</span>`;
     else out += esc(m[0]);
@@ -47,11 +58,11 @@ function decorateEditor(problems) {
     if (!prev || (prev.level === 'warn' && p.level === 'error')) byLine.set(p.line, p);
   }
   const lines = ta.value.split('\n');
-  const hlLine = state.mode === 'text' ? hlTextLine : hlSqlLine;
+  const hlLine = state.mode === 'text' ? hlTextLine : hlSqlLine, hlState = {};
   // one block per line, so a wrapped line's real height can be measured
   hl.innerHTML = lines.map((l, i) => {
     const p = byLine.get(i + 1);
-    const h = hlLine(l);
+    const h = hlLine(l, hlState);
     if (!p || !l.trim()) return `<div>${h || '<br>'}</div>`;
     const lead = l.match(/^\s*/)[0];
     return `<div>${lead}<span class="h-${p.level}">${h.slice(lead.length)}</span></div>`;
@@ -151,6 +162,7 @@ ta.addEventListener('scroll', syncScroll);
 let pastedAll = false;
 ta.addEventListener('paste', () => {
   pastedAll = !ta.value.slice(0, ta.selectionStart).trim() && !ta.value.slice(ta.selectionEnd).trim();
+  setTimeout(() => { pastedAll = false; }); // a paste that inserted nothing has no input event
 });
 ta.addEventListener('input', () => {
   histTyping();
@@ -520,8 +532,9 @@ $('#pngBtn').onclick = () => { closeMenus(); exportPng(); };
 $('#copyImgBtn').onclick = () => { closeMenus(); copyImage(); };
 $('#sqlBtn').onclick = () => {
   closeMenus();
-  download(new Blob([currentSql()], { type: 'text/sql' }), 'schema.sql');
-  toast('Saved schema.sql');
+  const name = exportName('sql');
+  download(new Blob([currentSql()], { type: 'text/sql' }), name);
+  toast(`Saved ${name}`);
 };
 $('#sqlDataBtn').onclick = () => {
   closeMenus();

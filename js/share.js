@@ -5,7 +5,12 @@
 // stored on a server. Opening such a link adds it as a new tab, laid out automatically
 // for the viewer's screen (box positions are not in the link).
 
-const b64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+// Base64url, in chunks: spreading a big array into fromCharCode exceeds the argument limit
+function b64url(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 const unb64url = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 const squeeze = (bytes, how) => new Response(new Blob([bytes]).stream().pipeThrough(how)).arrayBuffer().then(b => new Uint8Array(b));
 
@@ -42,7 +47,8 @@ async function openShared() {
   try {
     const raw = await squeeze(unb64url(m[1]), new DecompressionStream('deflate-raw'));
     const d = JSON.parse(new TextDecoder().decode(raw));
-    newDoc(d.n || 'Shared', d.s, docFields(d.s, d.m === 'sql')); // no positions: auto layout, then fit
+    if (typeof d?.s !== 'string') throw new Error('no schema in the link');
+    newDoc(typeof d.n === 'string' && d.n || 'Shared', d.s, docFields(d.s, d.m === 'sql')); // no positions: auto layout, then fit
   } catch {
     toast('That link is broken or incomplete.');
   }
