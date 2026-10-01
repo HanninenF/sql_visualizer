@@ -188,6 +188,11 @@ function simplePath(e) {
   return [[e.x1, e.sy], [X, e.sy], [X, e.ty], [e.x2, e.ty]];
 }
 
+// The router's search arrays, kept between calls (it runs on every keystroke and drag frame).
+// A cell's cost counts only if it was set in the current search (seen === stamp), so the
+// arrays don't have to be cleared before each search.
+const routeBuf = { g: new Float64Array(0), prev: new Int32Array(0), seen: new Uint32Array(0), stamp: 0 };
+
 function routeEdges(edges, boxes) {
   if (!edges.length) return;
   edges.forEach(e => chooseSides(e));
@@ -238,7 +243,10 @@ function routeEdges(edges, boxes) {
   const segKey = (p, q) => p < q ? p + '-' + q : q + '-' + p;
   const DX = [1, -1, 0, 0], DY = [0, 0, 1, -1], REV = [1, 0, 3, 2];
   const size = nx * ny * 4;
-  const g = new Float64Array(size), prev = new Int32Array(size);
+  if (routeBuf.g.length < size) {
+    Object.assign(routeBuf, { g: new Float64Array(size), prev: new Int32Array(size), seen: new Uint32Array(size), stamp: 0 });
+  }
+  const { g, prev, seen } = routeBuf;
 
   // short arrows first, so they get the direct lanes; self-references last, to see what's taken
   const len = e => e.a === e.b ? Infinity : Math.abs(e.sx - e.tx) + Math.abs(e.sy - e.ty);
@@ -282,13 +290,15 @@ function routeEdges(edges, boxes) {
       if (used.get(key)?.has(e.to)) return 0;
       return usedNodes.get(n)?.size ? CROSS : 0;
     };
-    g.fill(Infinity);
+    if (++routeBuf.stamp === 0xffffffff) { seen.fill(0); routeBuf.stamp = 1; }
+    const stamp = routeBuf.stamp;
     const tx = xs[t % nx], ty = ys[Math.floor(t / nx)];
     const h = n => Math.abs(xs[n % nx] - tx) + Math.abs(ys[Math.floor(n / nx)] - ty);
     const heap = new MinHeap();
     const s0 = s * 4 + dir0;
     g[s0] = 0;
     prev[s0] = -1;
+    seen[s0] = stamp;
     heap.push(h(s), s0);
     while (heap.size) {
       const st = heap.pop();
@@ -320,7 +330,8 @@ function routeEdges(edges, boxes) {
     return null;
 
     function relax(from, to, cost, hh) {
-      if (cost >= g[to]) return;
+      if (seen[to] === stamp && cost >= g[to]) return;
+      seen[to] = stamp;
       g[to] = cost;
       prev[to] = from;
       heap.push(cost + hh, to);
