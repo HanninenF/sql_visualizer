@@ -377,9 +377,20 @@ function saveTable() {
     if (name !== dlg.orig && pos[dlg.orig]) { pos[name] = pos[dlg.orig]; delete pos[dlg.orig]; }
     const [s, e] = blockRange(lines, t.line - 1);
     const comments = lines.slice(s + 1, e + 1).filter(l => /^\s+#/.test(l)); // keep comment lines inside the table
-    // and index lines (the dialog only shows one-column indexes), following renamed columns
-    const indexLines = lines.slice(s + 1, e + 1).filter(l => INDEX_LINE.test(l.replace(/#.*$/, '')))
-      .map(l => l.replace(/\(([^)]*)\)/, (_, cs) => '(' + cs.split(',').map(n => renamed.get(lc(n.trim())) ?? n.trim()).join(', ') + ')'));
+    // and index lines, following renamed columns and leaving out deleted ones. An unnamed
+    // one-column index is the column's Index checkbox, which was written as a flag above.
+    const kept = new Set(cols.filter(c => c.origName).map(c => lc(c.origName)));
+    const deleted = n => t.cols.some(c => lc(c.name) === lc(n)) && !kept.has(lc(n));
+    const named = new Set(cols.map(c => lc(c.name))), flagged = new Set(cols.filter(c => c.index).map(c => lc(c.name)));
+    const indexLines = lines.slice(s + 1, e + 1).flatMap(l => {
+      const m = l.replace(/#.*$/, '').match(INDEX_LINE);
+      if (!m) return [];
+      const orig = (m[2] ?? '').split(',').map(n => n.trim()).filter(Boolean);
+      const cs = orig.filter(n => !deleted(n)).map(n => renamed.get(lc(n)) ?? n);
+      const one = !m[1] && cs.length === 1 && named.has(lc(cs[0]));
+      if (!cs.length || (one && (orig.length === 1 || flagged.has(lc(cs[0]))))) return [];
+      return [l.replace(/\(([^)]*)\)?/, '(' + cs.join(', ') + ')')];
+    });
     lines.splice(s, e - s + 1, block[0], ...comments, ...block.slice(1), ...indexLines);
     at = s + 1;
   } else {

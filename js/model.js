@@ -244,14 +244,24 @@ function resolve(tables, implicit = false) {
   for (const t of tables) {
     t.indexes ??= [];
     t.multiIndexes = [];
-    for (const ix of t.indexes) {
+    const named = new Map(); // the index's name in the SQL, lower case → index
+    t.indexes = t.indexes.filter(ix => {
       const cols = ix.cols.map(n => t.cols.find(c => c.name.toLowerCase() === n.toLowerCase()));
       const missing = ix.cols.find((n, i) => !cols[i]);
-      if (missing) { problems.push(problem(ix.line, `${t.name} has no column ${missing}`)); continue; }
+      if (missing) { problems.push(problem(ix.line, `${t.name} has no column ${missing}`)); return true; }
       ix.cols = cols.map(c => c.name);
+      const key = (ix.name ?? indexName(t.name, ix.cols)).toLowerCase(), prev = named.get(key);
+      if (prev) { // MariaDB refuses two indexes with the same name
+        problems.push(prev.cols.join() === ix.cols.join()
+          ? problem(ix.line, `This index is already on line ${prev.line}`, 'warn')
+          : problem(ix.line, `Two indexes are named ${ix.name ?? key}`));
+        return false;
+      }
+      named.set(key, ix);
       if (cols.length === 1) cols[0].indexed = true;
       else t.multiIndexes.push(ix);
-    }
+      return true;
+    });
   }
   return problems;
 }
