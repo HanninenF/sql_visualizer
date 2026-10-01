@@ -109,16 +109,19 @@ async function closeDoc(id) {
     });
     if (!ok) return;
   }
-  const entry = docs.list[i], data = store.get(docKey(id), null), history = docHistory.get(id);
-  if (docs.list.length === 1) newDoc('Untitled', ''); // never zero tabs
-  else if (id === docs.active) switchDoc(docs.list[i + 1]?.id ?? docs.list[i - 1].id);
-  docs.list.splice(docs.list.indexOf(entry), 1);
+  const entry = docs.list[i], history = docHistory.get(id);
+  const data = id === docs.active ? docData() : store.get(docKey(id), null); // not storage: its save may have failed
+  if (docs.list.length === 1) { docs.list.splice(i, 1); newDoc('Untitled', ''); } // never zero tabs (and "Untitled" is free)
+  else {
+    if (id === docs.active) switchDoc(docs.list[i + 1]?.id ?? docs.list[i - 1].id);
+    docs.list.splice(i, 1);
+  }
   docHistory.delete(id);
   store.remove(docKey(id));
   persist('docs', docs);
   renderTabs();
   toast(`Closed “${entry.name}”`, 'Undo', () => {
-    persist(docKey(id), data);
+    if (data) persist(docKey(id), data);
     if (history) docHistory.set(id, history);
     docs.list.splice(Math.min(i, docs.list.length), 0, entry);
     switchDoc(id);

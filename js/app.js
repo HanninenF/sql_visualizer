@@ -200,7 +200,7 @@ let model = { tables: [] };
 let prevNames = null; // table names at the last draw (null: just loaded)
 
 function readDoc(id) {
-  const d = store.get(docKey(id), {});
+  const d = store.get(docKey(id), null) ?? {};
   for (const k of Object.keys(DOC_DEFAULTS)) state[k] = d[k] ?? DOC_DEFAULTS[k];
   pos = d.pos ?? {};
   docView = d.view ?? null;
@@ -214,11 +214,12 @@ function persist(key, value) {
   storageWarned = true;
   toast('Could not save: the browser storage is full. Close some tabs you no longer need.');
 }
-function saveDoc() {
+function docData() {
   const d = { pos, view: { tx: view.tx, ty: view.ty, s: view.s } };
   for (const k of Object.keys(DOC_DEFAULTS)) d[k] = state[k];
-  persist(docKey(docs.active), d);
+  return d;
 }
+function saveDoc() { persist(docKey(docs.active), docData()); }
 let saveTimer = 0;
 function saveNow() {
   clearTimeout(saveTimer);
