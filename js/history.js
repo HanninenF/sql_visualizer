@@ -144,12 +144,14 @@ function updateHistButtons() {
   $('#redoBtn').disabled = !hist.redo.some(e => !e.silent);
 }
 
-// ⌘Z / ⇧⌘Z / Ctrl+Y everywhere, except in the dialog's own input fields
+// ⌘Z / ⇧⌘Z / Ctrl+Y everywhere, except in other text fields (diagram name, tab rename,
+// table dialog) and open dialogs, which keep their own undo
 document.addEventListener('keydown', e => {
   if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
   const k = e.key.toLowerCase();
   if (k !== 'z' && k !== 'y') return;
-  if (e.target.closest?.('#tableDlg')) return;
+  if (e.target !== ta && e.target.matches?.('input, textarea, [contenteditable]')) return;
+  if (e.target.closest?.('#tableDlg, #confirmDlg')) return;
   e.preventDefault();
   if (k === 'y' || e.shiftKey) histRedo(); else histUndo();
 });
