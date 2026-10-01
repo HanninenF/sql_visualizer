@@ -220,13 +220,18 @@ function saveDoc() {
   persist(docKey(docs.active), d);
 }
 let saveTimer = 0;
+function saveNow() {
+  clearTimeout(saveTimer);
+  saveTimer = 0;
+  persist('settings', Object.fromEntries(SETTINGS.map(k => [k, state[k]])));
+  saveDoc();
+}
 function saveState() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    persist('settings', Object.fromEntries(SETTINGS.map(k => [k, state[k]])));
-    saveDoc();
-  }, 250);
+  saveTimer = setTimeout(saveNow, 250);
 }
+// closing the tab within those 250 ms shouldn't lose the last keystrokes
+window.addEventListener('pagehide', () => { if (saveTimer) saveNow(); });
 
 function parseCurrent() {
   const r = state.mode === 'text' ? parseText(ta.value) : parseSQL(ta.value);
@@ -605,7 +610,8 @@ window.addEventListener('resize', () => { if (presentView) fit(2); });
 // ─── Start ───────────────────────────────────────────────────────────────────
 // Box widths are measured with the Geist fonts, so wait for them (at most 1.5s).
 
-const fontsLoaded = Promise.all(Object.values(FONTS).map(f => document.fonts.load(f)));
+// A font that fails to download (blocked remote fonts) counts as loaded: the fallback is measured.
+const fontsLoaded = Promise.all(Object.values(FONTS).map(f => document.fonts.load(f))).catch(() => {});
 Promise.race([fontsLoaded, new Promise(r => setTimeout(r, 1500))]).then(() => {
   widthCache.clear();
   loadEditor();

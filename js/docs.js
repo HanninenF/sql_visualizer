@@ -49,8 +49,7 @@ nameInput.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === 
 function switchDoc(id) {
   if (id === docs.active || !docs.list.some(d => d.id === id)) return;
   histCommit();
-  clearTimeout(saveTimer);
-  saveDoc();
+  saveNow();
   docHistory.set(docs.active, { undo: hist.undo, redo: hist.redo });
   docs.active = id;
   persist('docs', docs);
