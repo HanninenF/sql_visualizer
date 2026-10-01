@@ -650,6 +650,16 @@ document.addEventListener('fullscreenchange', () => { if (!document.fullscreenEl
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && presentView) setPresenting(false); });
 window.addEventListener('resize', () => { if (presentView) fit(2); });
 
+// Shortcuts are written the Mac way in the page; elsewhere they say Ctrl and Shift
+if (!/mac|iphone|ipad/i.test(navigator.userAgentData?.platform ?? navigator.platform)) {
+  const pc = s => s.replace('⇧⌘Z', 'Ctrl+Y').replace('⌘⇧', 'Ctrl+Shift+').replace('⌘Z', 'Ctrl+Z')
+    .replace(/⇧/g, 'Shift').replace(/⌘/g, 'Ctrl');
+  for (const el of document.querySelectorAll('[title*="⌘"]')) el.title = pc(el.title);
+  for (const el of document.querySelectorAll('.menu .ext, .help-keys span')) {
+    if (/[⌘⇧]/.test(el.textContent)) el.textContent = pc(el.textContent);
+  }
+}
+
 // ─── Start ───────────────────────────────────────────────────────────────────
 // Box widths are measured with the Geist fonts, so wait for them (at most 1.5s).
 
