@@ -18,9 +18,7 @@ const squeeze = (bytes, how) => new Response(new Blob([bytes]).stream().pipeThro
 // with comments became a 650 character link instead of 5800). SQL comments are left out.
 function shareText() {
   if (state.mode === 'text') return state.text;
-  const r = parseSQL(state.sql);
-  resolve(r.tables);
-  return genText(r.tables, []);
+  return sqlToText(state.sql, false);
 }
 
 async function shareLink() {

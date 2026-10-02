@@ -203,6 +203,8 @@ if (!docs?.list?.length) {
 }
 if (!docs.list.some(d => d.id === docs.active)) docs.active = docs.list[0].id;
 let persistedDocs = structuredClone(docs);
+const documentTransforms = [];
+const normalizeDocData = data => documentTransforms.reduce((d, transform) => transform(d), data);
 
 // Merge this window's changes with other windows instead of replacing their whole tab list.
 function syncDocs(remote = store.get('docs', docs)) {
@@ -244,7 +246,7 @@ let model = { tables: [] };
 let prevNames = null; // table names at the last draw (null: just loaded)
 
 function readDoc(id) {
-  const d = store.get(docKey(id), null) ?? {};
+  const d = normalizeDocData(store.get(docKey(id), null) ?? {});
   for (const k of Object.keys(DOC_DEFAULTS)) state[k] = d[k] ?? DOC_DEFAULTS[k];
   pos = d.pos ?? {};
   docView = d.view ?? null;
@@ -263,10 +265,11 @@ function persist(key, value) {
   storageWarned = true;
   toast('Could not save: the browser storage is full. Close some tabs you no longer need.');
 }
-function docData() {
+function docData(id = docs.active) {
+  if (id !== docs.active) return normalizeDocData({ ...DOC_DEFAULTS, pos: {}, ...store.get(docKey(id), {}) });
   const d = { pos, view: { tx: view.tx, ty: view.ty, s: view.s } };
   for (const k of Object.keys(DOC_DEFAULTS)) d[k] = state[k];
-  return d;
+  return normalizeDocData(d);
 }
 function saveDoc() { persist(docKey(docs.active), docData()); }
 let saveTimer = 0;
@@ -307,9 +310,7 @@ function regenerate(which) {
     state.sql = genSQL(r.tables);
     state.sqlStale = false;
   } else {
-    const r = parseSQL(state.sql);
-    resolve(r.tables);
-    state.text = genText(r.tables, r.problems);
+    state.text = sqlToText(state.sql);
     state.textStale = false;
   }
   histCommit();
@@ -493,7 +494,7 @@ $('#dataBtn').onclick = () => {
 applyDataView();
 
 // Menus: Export (app bar) and Text colours (editor header)
-const MENUS = [['#exportBtn', '#exportMenu'], ['#schemeBtn', '#schemeMenu'], ['#themeMenuBtn', '#themeMenu'], ['#notationBtn', '#notationMenu']];
+const MENUS = [];
 function closeMenus() {
   for (const [btn, menu] of MENUS) {
     if ($(menu).contains(document.activeElement)) $(btn).focus(); // e.g. an item picked with Enter
@@ -512,7 +513,8 @@ function openMenu(btn, menu, focus = null) {
 }
 // Keyboard: ↓/↑ on the button opens the menu, then ↓ ↑ Home End move through it,
 // Esc closes it (back to the button) and Tab leaves it
-for (const [btn, menu] of MENUS) {
+function registerMenu(btn, menu) {
+  MENUS.push([btn, menu]);
   $(btn).onclick = e => {
     e.stopPropagation();
     if ($(menu).hidden) openMenu(btn, menu, e.detail === 0 ? 'first' : null); // detail 0: Enter or Space
@@ -539,6 +541,7 @@ for (const [btn, menu] of MENUS) {
   });
 }
 // Editor text size (the Text menu stays open while stepping, so you see the change)
+for (const [btn, menu] of [['#exportBtn', '#exportMenu'], ['#schemeBtn', '#schemeMenu'], ['#themeMenuBtn', '#themeMenu'], ['#notationBtn', '#notationMenu']]) registerMenu(btn, menu);
 const FONT_MIN = 10, FONT_MAX = 24;
 const lineHeight = () => Math.round(state.fontSize * 1.54); // 13px → 20px, as in the design
 function applyFontSize() {

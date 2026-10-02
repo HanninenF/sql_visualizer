@@ -1,5 +1,12 @@
 'use strict';
 
+// One conversion shared by editor regeneration, share links and document transforms.
+function sqlToText(sql, includeProblems = true) {
+  const r = parseSQL(sql);
+  resolve(r.tables);
+  return genText(r.tables, includeProblems ? r.problems : []);
+}
+
 // ─── Model → SQL (MariaDB) ───────────────────────────────────────────────────
 
 // Reserved words in MariaDB (and MySQL 8): names like these must be quoted

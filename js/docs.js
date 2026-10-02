@@ -53,6 +53,11 @@ function switchDoc(id) {
   docHistory.set(docs.active, { undo: hist.undo, redo: hist.redo });
   docs.active = id;
   persist('docs', docs);
+  showDoc(id);
+}
+
+// Shared by switching and replacing a document; extensions do not reproduce this lifecycle.
+function showDoc(id) {
   const h = docHistory.get(id);
   hist.undo = h?.undo ?? [];
   hist.redo = h?.redo ?? [];
@@ -63,6 +68,18 @@ function switchDoc(id) {
   if (docView) { Object.assign(view, docView); applyView(); } else fit();
   renderTabs();
   updateHistButtons();
+}
+
+function replaceDoc(id, name, data) {
+  const tab = docs.list.find(d => d.id === id);
+  if (!tab) return;
+  histCommit();
+  saveNow();
+  persist(docKey(id), data);
+  docHistory.delete(id);
+  tab.name = name;
+  if (id === docs.active) showDoc(id);
+  else switchDoc(id);
 }
 
 // A name not used by another tab: "Untitled", "Untitled 2", …
