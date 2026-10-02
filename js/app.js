@@ -202,6 +202,38 @@ if (!docs?.list?.length) {
   store.remove('pos');
 }
 if (!docs.list.some(d => d.id === docs.active)) docs.active = docs.list[0].id;
+let persistedDocs = structuredClone(docs);
+
+// Merge this window's changes with other windows instead of replacing their whole tab list.
+function syncDocs(remote = store.get('docs', docs)) {
+  if (!remote?.list?.length) return;
+  const base = new Map(persistedDocs.list.map(d => [d.id, d]));
+  const incoming = new Map(remote.list.map(d => [d.id, d]));
+  const localIds = new Set(docs.list.map(d => d.id));
+  const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const merged = [];
+  for (const entry of docs.list) {
+    const old = base.get(entry.id), next = incoming.get(entry.id);
+    if (old && !next && entry.id !== docs.active && equal(entry, old)) continue;
+    if (old && next) {
+      for (const key of new Set([...Object.keys(old), ...Object.keys(next)])) {
+        if (key === 'id' || !equal(entry[key], old[key])) continue;
+        if (key in next) entry[key] = structuredClone(next[key]);
+        else delete entry[key];
+      }
+    }
+    merged.push(entry);
+  }
+  for (const entry of remote.list) {
+    if (!localIds.has(entry.id) && !base.has(entry.id)) merged.push(structuredClone(entry));
+  }
+  docs.list.splice(0, docs.list.length, ...merged);
+  persistedDocs = structuredClone(remote);
+}
+window.addEventListener('storage', e => {
+  if (e.key !== 'sqlviz.docs' || !e.newValue) return;
+  try { syncDocs(JSON.parse(e.newValue)); renderTabs(); } catch { /* ignore malformed storage */ }
+});
 
 const state = Object.assign({
   colors: 'bleak', fontSize: 13, wrap: true, notation: 'arrows', implicit: false, keysOnly: false, dataView: false, panel: 'mid', leftW: null, ...DOC_DEFAULTS,
@@ -222,7 +254,12 @@ readDoc(docs.active);
 // Saving. A failed save (storage full) is reported once instead of losing work silently.
 let storageWarned = false;
 function persist(key, value) {
-  if (store.set(key, value) || storageWarned) return;
+  if (key === 'docs') syncDocs();
+  if (store.set(key, value)) {
+    if (key === 'docs') persistedDocs = structuredClone(docs);
+    return;
+  }
+  if (storageWarned) return;
   storageWarned = true;
   toast('Could not save: the browser storage is full. Close some tabs you no longer need.');
 }
