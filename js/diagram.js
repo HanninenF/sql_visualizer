@@ -585,7 +585,7 @@ function dataBoxBody(t, b, interactive) {
     const y = dataRowY(0);
     s += `<g class="drow empty-data-row" data-row="-1">`;
     if (interactive) s += `<rect class="hit" x="1" y="${y - DATA_H / 2}" width="${b.w - 2}" height="${DATA_H}"/>`;
-    s += `<text class="dcell null" x="${PAD_X}" y="${y}">no rows</text></g>`;
+    s += `<text class="dcell null" x="${PAD_X}" y="${y}">+ Add row</text></g>`;
     return s;
   }
   cells.forEach((row, k) => {
