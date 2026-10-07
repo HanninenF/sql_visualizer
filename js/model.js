@@ -290,10 +290,11 @@ function resolve(tables, implicit = false) {
 
     // Explicit data may still be written in the sidebar, even for an
     // AUTO_INCREMENT Id. Duplicate primary-key values are never valid.
-    if (t.idCol && t.dataRows.length) {
+    const dataRows = t.dataRows ?? [];
+    if (t.idCol && dataRows.length) {
       const idIndex = t.cols.indexOf(t.idCol);
       const seenIds = new Map();
-      for (const row of t.dataRows) {
+      for (const row of dataRows) {
         const value = row.values[idIndex];
         if (value == null || value === '') continue;
         const key = String(value).trim();
