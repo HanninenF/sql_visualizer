@@ -16,8 +16,9 @@ function dataRowAtPoint(e) {
     const localY = p.y - box.y;
     const firstRow = HEAD_H + 6 + COLHEAD_H;
     const rowIndex = Math.floor((localY - firstRow) / DATA_H);
-    if (rowIndex >= 0 && rowIndex < (table.dataRows?.length ?? 0)) return { table, rowIndex };
-    if (!table.dataRows?.length && rowIndex === 0) return { table, rowIndex: null };
+    if (rowIndex === 0) return { table, rowIndex: null };
+    const dataIndex = rowIndex - 1;
+    if (dataIndex >= 0 && dataIndex < (table.dataRows?.length ?? 0)) return { table, rowIndex: dataIndex };
   }
   return null;
 }
