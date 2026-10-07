@@ -145,10 +145,13 @@ function refreshHints() {
     nul.disabled = c.pk || autoPk;
     if (nul.disabled) { nul.checked = false; c.nullable = false; }
     const auto = row.querySelector('.c-auto');
-    const implicitAuto = autoPk && isId && INT_TYPES.has(normType(c.type || 'int').split(/[ (]/)[0]);
-    auto.checked = c.autoInc || implicitAuto;
-    auto.disabled = implicitAuto;
-    auto.parentNode.title = implicitAuto ? 'Id is AUTO_INCREMENT automatically' : 'AUTO_INCREMENT';
+    const autoAllowed = isId && INT_TYPES.has(normType(c.type || 'int').split(/[ (]/)[0]);
+    const implicitAuto = autoAllowed && autoPk;
+    if (!autoAllowed) c.autoInc = false;
+    auto.checked = autoAllowed && (c.autoInc || implicitAuto);
+    auto.disabled = !autoAllowed || implicitAuto;
+    auto.parentNode.title = !autoAllowed ? 'AUTO_INCREMENT is only available for an integer Id' :
+      implicitAuto ? 'Id is AUTO_INCREMENT automatically' : 'AUTO_INCREMENT';
     row.querySelector('.c-type').placeholder = isId || c.ref ? 'int' : 'vc';
   }
 }
