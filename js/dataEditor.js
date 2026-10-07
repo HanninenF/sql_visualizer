@@ -113,7 +113,7 @@ function closeDataEditor() {
 
 function saveDataEditor() {
   if (!dataEdit) return;
-  const inputs = [...dataFields.querySelectorAll('[data-col]')];
+  const inputs = [...dataFields.querySelectorAll('input[data-col], select[data-col]')];
   const values = inputs.map(input => input.value.trim() === '' ? null : input.value);
   const lines = state.text.split('\n');
   const lineIndex = dataEdit.row ? dataEdit.row.line - 1 : -1;
