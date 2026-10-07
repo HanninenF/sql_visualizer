@@ -189,6 +189,7 @@
           <span>⌘ + scroll</span><span>Zoom</span>
           <span>Click a row</span><span>Jump to its line</span>
           <span>Double-click a table</span><span>Edit it in a dialog</span>
+          <span>Double-click a data row</span><span>Edit its values</span>
           <span>Hover a table</span><span>Highlight its arrows</span>
           <span>SQL tab</span><span>Edit as MariaDB; changes convert back to Simple</span>
         </div>
@@ -335,6 +336,19 @@
   </div>
 </div>
 
+<div id="dataDlg" class="dlg-backdrop" hidden>
+  <div class="dlg data-dlg" role="dialog" aria-modal="true" aria-labelledby="dataDlgTitle">
+    <h2 id="dataDlgTitle">Edit data</h2>
+    <div id="dataFields"></div>
+    <div id="dataError" class="dlg-error"></div>
+    <div class="dlg-actions">
+      <span class="spacer"></span>
+      <button id="dataCancel" class="btn-outline">Cancel</button>
+      <button id="dataSave" class="btn-primary">Save</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/examples.js"></script>
 <script src="js/model.js"></script>
 <script src="js/sql.js"></script>
@@ -347,5 +361,6 @@
 <script src="js/docs.js"></script>
 <script src="js/share.js"></script>
 <script src="js/tableEditor.js"></script>
+<script src="js/dataEditor.js"></script>
 </body>
 </html>

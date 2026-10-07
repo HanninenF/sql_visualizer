@@ -584,7 +584,7 @@ function dataBoxBody(t, b, interactive) {
   if (!cells.length) return s + `<text class="dcell null" x="${PAD_X}" y="${dataRowY(0)}">no rows</text>`;
   cells.forEach((row, k) => {
     const y = dataRowY(k);
-    s += `<g class="drow">`;
+    s += `<g class="drow" data-row="${k}">`;
     if (interactive) s += `<rect class="hit" x="1" y="${y - DATA_H / 2}" width="${b.w - 2}" height="${DATA_H}"/>`;
     row.forEach((cell, i) => {
       if (cell.key) s += `<rect class="dmark" style="--h:${cell.hue}" data-k="${esc(cell.key)}" x="${xs[i] - 5}" y="${y - DATA_H / 2 + 3}" width="${cws[i] + 10}" height="${DATA_H - 6}" rx="4"/>`;
