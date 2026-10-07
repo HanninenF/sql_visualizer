@@ -38,8 +38,18 @@ function referenceValues(c) {
     .map(String))];
 }
 
-function generatedValue(table, c, refs, index) {
+function generatedValue(table, c, refs, index, currentValues = []) {
   if (refs.length) return refs[0];
+  if (/e.?mail|epost/i.test(c.name)) {
+    const nameParts = table.cols
+      .map((col, i) => ({ col, value: currentValues[i] ?? '' }))
+      .filter(({ col, value }) => value && /name|namn|first|for|last|sur|efter/i.test(col.name))
+      .map(({ value }) => value.trim())
+      .join(' ')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '');
+    if (nameParts) return `${nameParts}@example.com`;
+  }
   try {
     const swedish = SWEDISH.test(low(table.name + ' ' + table.cols.map(col => col.name).join(' ')));
     const person = {
@@ -133,8 +143,9 @@ dataFields.addEventListener('click', e => {
   if (!button || !dataEdit) return;
   const i = +button.dataset.col, c = dataEdit.table.cols[i], refs = referenceValues(c);
   const control = dataFields.querySelector(`[data-col="${i}"]`);
+  const currentValues = [...dataFields.querySelectorAll('[data-col]')].map(field => field.value);
   dataEdit.exampleIndex = (dataEdit.exampleIndex ?? 0) + 1;
-  control.value = generatedValue(dataEdit.table, c, refs, dataEdit.exampleIndex);
+  control.value = generatedValue(dataEdit.table, c, refs, dataEdit.exampleIndex, currentValues);
 });
 $('#dataCancel').onclick = closeDataEditor;
 $('#dataSave').onclick = saveDataEditor;
