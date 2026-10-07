@@ -17,6 +17,7 @@ function dataRowAtPoint(e) {
     const firstRow = HEAD_H + 6 + COLHEAD_H;
     const rowIndex = Math.floor((localY - firstRow) / DATA_H);
     if (rowIndex >= 0 && rowIndex < (table.dataRows?.length ?? 0)) return { table, rowIndex };
+    if (!table.dataRows?.length && rowIndex === 0) return { table, rowIndex: null };
   }
   return null;
 }
@@ -29,13 +30,13 @@ function dataValueText(value) {
 
 function openDataEditor(tableName, rowIndex) {
   const table = model.tables.find(t => t.name === tableName);
-  const row = table?.dataRows?.[rowIndex];
-  if (!table || !row) return;
+  const row = rowIndex == null ? null : table?.dataRows?.[rowIndex];
+  if (!table || (rowIndex != null && !row)) return;
   dataEdit = { table, rowIndex, row };
-  $('#dataDlgTitle').textContent = `Edit ${table.name} data`;
+  $('#dataDlgTitle').textContent = row ? `Edit ${table.name} data` : `Add data to ${table.name}`;
   dataFields.innerHTML = table.cols.map((c, i) =>
     `<label class="field data-field"><span>${esc(c.name)}</span>` +
-    `<input type="text" data-col="${i}" value="${esc(row.values[i] ?? '')}" autocomplete="off" spellcheck="false"></label>`
+    `<input type="text" data-col="${i}" value="${esc(row?.values[i] ?? '')}" autocomplete="off" spellcheck="false"></label>`
   ).join('');
   dataError.textContent = '';
   dataDlg.hidden = false;
@@ -52,13 +53,28 @@ function saveDataEditor() {
   const inputs = [...dataFields.querySelectorAll('input[data-col]')];
   const values = inputs.map(input => input.value.trim() === '' ? null : input.value);
   const lines = state.text.split('\n');
-  const lineIndex = dataEdit.row.line - 1;
-  if (lineIndex < 0 || lineIndex >= lines.length) return closeDataEditor();
-  const indent = lines[lineIndex].match(/^\s*/)?.[0] ?? '    ';
-  const next = `${indent}${values.map(dataValueText).join(' | ')}`;
-  if (lines[lineIndex] === next) return closeDataEditor();
+  const lineIndex = dataEdit.row ? dataEdit.row.line - 1 : -1;
+  if (dataEdit.row && (lineIndex < 0 || lineIndex >= lines.length)) return closeDataEditor();
+  const indent = dataEdit.row ? lines[lineIndex].match(/^\s*/)?.[0] ?? '    ' : '    ';
   histBegin('edit data');
-  lines[lineIndex] = next;
+  if (dataEdit.row) {
+    const next = `${indent}${values.map(dataValueText).join(' | ')}`;
+    if (lines[lineIndex] === next) { histCommit(); return closeDataEditor(); }
+    lines[lineIndex] = next;
+  } else {
+    const tableStart = dataEdit.table.line - 1;
+    let tableEnd = lines.length;
+    for (let i = tableStart + 1; i < lines.length; i++) {
+      if (lines[i].trim() && !/^\s/.test(lines[i])) { tableEnd = i; break; }
+    }
+    let dataLine = -1;
+    for (let i = tableStart + 1; i < tableEnd; i++) {
+      if (/^\s*@data\s*$/i.test(lines[i])) { dataLine = i; break; }
+    }
+    const rowText = `    ${values.map(dataValueText).join(' | ')}`;
+    if (dataLine < 0) lines.splice(tableEnd, 0, '  @data', rowText);
+    else lines.splice(dataLine + 1, 0, rowText);
+  }
   state.text = lines.join('\n');
   state.textStale = true;
   update();
