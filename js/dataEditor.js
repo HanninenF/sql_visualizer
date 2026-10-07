@@ -177,10 +177,6 @@ dataFields.addEventListener('click', e => {
     const menu = dataFields.querySelector(`[data-ref-menu="${toggle.dataset.refToggle}"]`);
     dataFields.querySelectorAll('.data-ref-menu').forEach(other => { if (other !== menu) other.hidden = true; });
     menu.hidden = !menu.hidden;
-    if (!menu.hidden) {
-      menu.classList.remove('up');
-      if (menu.getBoundingClientRect().bottom > window.innerHeight - 8) menu.classList.add('up');
-    }
     return;
   }
   const option = e.target.closest('[data-ref-option]');
