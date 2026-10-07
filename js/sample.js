@@ -1,6 +1,6 @@
 'use strict';
 
-// ─── Sample data ─────────────────────────────────────────────────────────────
+// ─── Data helpers ────────────────────────────────────────────────────────────
 // Explicit rows from @data blocks. Tables without an @data block stay empty.
 
 // Seeded randomness: the same key always gives the same number in [0, 1)
@@ -242,7 +242,8 @@ function sampleData(tables) {
 }
 
 // INSERT statements for the explicit @data rows (appended to the MariaDB script)
-function sampleInserts(tables) {
+function dataInserts(tables) {
+  if (!tables.some(t => t.dataRows?.length)) return '';
   const data = sampleData(tables);
   const lit = (c, v) => v == null ? 'NULL' : isNumeric(c) ? v : `'${v.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`;
   const out = ['-- Data from @data blocks', 'SET FOREIGN_KEY_CHECKS = 0;'];

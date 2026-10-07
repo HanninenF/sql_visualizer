@@ -361,11 +361,23 @@ function genText(tables, notes) {
       if (c.nullable) parts.push('null');
       if (c.unique) parts.push('unique');
       if (flagIndexes.some(ix => ix.cols[0] === c.name)) parts.push('index');
+      if (c.autoInc) parts.push('auto_increment');
       if (c.ref) parts.push('-> ' + refText(c));
       out.push('  ' + parts.join(' '));
     }
     for (const ix of (t.indexes ?? []).filter(ix => !flagIndexes.includes(ix))) {
       out.push(`  index ${ix.name && ix.name !== indexName(t.name, ix.cols) ? ix.name + ' ' : ''}(${ix.cols.join(', ')})`);
+    }
+    if (t.dataRows?.length) {
+      out.push('', '  @data');
+      for (const row of t.dataRows) {
+        const values = row.values.map(value => {
+          if (value == null) return 'NULL';
+          const text = String(value);
+          return /[\s,#|]/.test(text) ? `'${text.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'` : text;
+        });
+        out.push('    ' + values.join(', '));
+      }
     }
   });
   return out.join('\n') + '\n';
