@@ -113,7 +113,7 @@ function openDataEditor(tableName, rowIndex) {
     const isReference = !!c.ref || !!c.target;
     const isAuto = !!c.autoInc;
     const control = isAuto
-      ? `<input type="text" data-col="${i}" value="${esc(value)}" disabled title="Generated automatically">`
+      ? `<input type="text" data-col="${i}" value="${esc(value)}" disabled title="AUTO_INCREMENT">`
       : isReference
       ? `<div class="data-ref-picker"><input type="hidden" data-col="${i}" value="${esc(value)}">` +
         `<button type="button" class="data-ref-current" data-ref-toggle="${i}">${referenceLabel(options.find(option => option.value === String(value)))}</button>` +
