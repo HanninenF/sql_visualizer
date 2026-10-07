@@ -287,6 +287,24 @@ function resolve(tables, implicit = false) {
         problems.push(problem(c.line, 'AUTO_INCREMENT requires an integer primary key'));
       if (c.isPk && c.nullable) problems.push(problem(c.line, `${c.name} is a primary key and can't be null`));
     }
+
+    // Explicit data may still be written in the sidebar, even for an
+    // AUTO_INCREMENT Id. Duplicate primary-key values are never valid.
+    if (t.idCol && t.dataRows.length) {
+      const idIndex = t.cols.indexOf(t.idCol);
+      const seenIds = new Map();
+      for (const row of t.dataRows) {
+        const value = row.values[idIndex];
+        if (value == null || value === '') continue;
+        const key = String(value).trim();
+        const previous = seenIds.get(key);
+        if (previous) {
+          problems.push(problem(row.line, `Duplicate ${t.idCol.name} value "${value}" in ${t.name}; already used on line ${previous.line}`));
+        } else {
+          seenIds.set(key, row);
+        }
+      }
+    }
   }
   // Indexes: a one-column index is shown as a flag on its column, a longer one below the columns
   for (const t of tables) {
