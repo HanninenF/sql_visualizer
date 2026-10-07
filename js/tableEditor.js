@@ -487,7 +487,10 @@ dlgEl.addEventListener('keydown', e => {
 svg.addEventListener('dblclick', e => {
   // the canvas captures the pointer on mousedown (for dragging), so the event's target
   // is the canvas itself: ask what is really under the pointer
-  const g = document.elementFromPoint(e.clientX, e.clientY)?.closest('.tbl');
+  const underPointer = document.elementFromPoint(e.clientX, e.clientY);
+  // Data rows have their own editor, registered after this table editor.
+  if (underPointer?.closest('.drow')) return;
+  const g = underPointer?.closest('.tbl');
   if (g) {
     openTableEditor(g.dataset.t);
   } else {

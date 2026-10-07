@@ -64,7 +64,8 @@ $('#dataSave').onclick = saveDataEditor;
 dataDlg.addEventListener('click', e => { if (e.target === dataDlg) closeDataEditor(); });
 
 svg.addEventListener('dblclick', e => {
-  const row = e.target.closest('.drow'), table = e.target.closest('.tbl');
+  const underPointer = document.elementFromPoint(e.clientX, e.clientY);
+  const row = underPointer?.closest('.drow'), table = underPointer?.closest('.tbl');
   if (!row || !table) return;
   e.preventDefault();
   openDataEditor(table.dataset.t, +row.dataset.row);
