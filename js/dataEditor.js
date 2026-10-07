@@ -91,6 +91,14 @@ $('#dataCancel').onclick = closeDataEditor;
 $('#dataSave').onclick = saveDataEditor;
 dataDlg.addEventListener('click', e => { if (e.target === dataDlg) closeDataEditor(); });
 
+svg.addEventListener('click', e => {
+  const hit = dataRowAtPoint(e);
+  if (!hit || hit.rowIndex != null) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  openDataEditor(hit.table.name, null);
+});
+
 svg.addEventListener('dblclick', e => {
   const hit = dataRowAtPoint(e);
   if (!hit) return;
