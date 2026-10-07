@@ -93,6 +93,13 @@ function syncGeneratedEmails() {
   });
 }
 
+function nextAutoValue(table, column) {
+  const values = (sampleData(model.tables).get(table) ?? [])
+    .map(row => Number(row.values.get(column)))
+    .filter(Number.isFinite);
+  return String(Math.max(0, ...values) + 1);
+}
+
 function openDataEditor(tableName, rowIndex) {
   const table = model.tables.find(t => t.name === tableName);
   const row = rowIndex == null ? null : table?.dataRows?.[rowIndex];
@@ -100,11 +107,14 @@ function openDataEditor(tableName, rowIndex) {
   dataEdit = { table, rowIndex, row };
   $('#dataDlgTitle').textContent = row ? `Edit ${table.name} data` : `Add data to ${table.name}`;
   dataFields.innerHTML = table.cols.map((c, i) => {
-    const value = row?.values[i] ?? '';
+    const value = row?.values[i] ?? (c.autoInc ? nextAutoValue(table, c) : '');
     const options = referenceOptions(c);
     const refs = options.map(option => option.value);
     const isReference = !!c.ref || !!c.target;
-    const control = isReference
+    const isAuto = !!c.autoInc;
+    const control = isAuto
+      ? `<input type="text" data-col="${i}" value="${esc(value)}" disabled title="Generated automatically">`
+      : isReference
       ? `<div class="data-ref-picker"><input type="hidden" data-col="${i}" value="${esc(value)}">` +
         `<button type="button" class="data-ref-current" data-ref-toggle="${i}">${referenceLabel(options.find(option => option.value === String(value)))}</button>` +
         `<div class="data-ref-menu" data-ref-menu="${i}" hidden>` +
@@ -113,7 +123,7 @@ function openDataEditor(tableName, rowIndex) {
         `</div></div>`
       : `<input type="text" data-col="${i}" value="${esc(value)}" autocomplete="off" spellcheck="false">`;
     return `<label class="field data-field"><span>${esc(c.name)}</span>${control}` +
-      `<button type="button" class="data-generate" data-col="${i}" title="Generate example">↻</button></label>`;
+      (isAuto ? '' : `<button type="button" class="data-generate" data-col="${i}" title="Generate example">↻</button>`) + '</label>';
   }).join('');
   dataError.textContent = '';
   dataDlg.hidden = false;
