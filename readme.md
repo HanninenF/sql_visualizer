@@ -30,7 +30,7 @@ Indent columns under each table. `Id` is an integer primary key; columns without
 
 ### Table data
 
-Add explicit rows with an `@data` block. Values follow the column order and are separated with `|`:
+Add explicit rows with an `@data` block. Values follow the column order and are separated with commas:
 
 ```text
 Dog
@@ -38,8 +38,8 @@ Dog
   Name vc
 
   @data
-    1 | Fredrik
-    2 | Bamse
+    1, Fredrik
+    2, Bamse
 ```
 
 The **Data** view displays these rows. Tables without an `@data` block are shown empty.

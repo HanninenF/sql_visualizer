@@ -45,6 +45,22 @@ const INDEX_LINE = /^\s+index\b\s*([\p{L}_][\p{L}\p{N}_$]*)?\s*\(([^)]*)\)?\s*$/
 // The name an index gets in the SQL when none was given
 const indexName = (table, cols) => `idx_${table}_${cols.join('_')}`;
 
+function splitDataValues(text) {
+  const separator = text.includes(',') ? ',' : text.includes('|') ? '|' : ',';
+  const values = [];
+  let start = 0, quote = null, escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (escaped) { escaped = false; continue; }
+    if (ch === '\\' && quote) { escaped = true; continue; }
+    if (quote) { if (ch === quote) quote = null; continue; }
+    if (ch === '"' || ch === "'") { quote = ch; continue; }
+    if (ch === separator) { values.push(text.slice(start, i).trim()); start = i + 1; }
+  }
+  values.push(text.slice(start).trim());
+  return values;
+}
+
 function parseText(src) {
   const tables = [], problems = [];
   let cur = null;
@@ -83,10 +99,10 @@ function parseText(src) {
       return;
     }
 
-    // Data rows are pipe-separated and indented one level below @data.
+    // Data rows are comma-separated and indented one level below @data.
     // Values are kept as strings here; sample.js applies SQL type semantics later.
     if (dataIndent >= 0 && indent > dataIndent) {
-      const values = code.trim().split('|').map(v => {
+      const values = splitDataValues(code.trim()).map(v => {
         const value = v.trim();
         if (/^null$/i.test(value)) return null;
         if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {

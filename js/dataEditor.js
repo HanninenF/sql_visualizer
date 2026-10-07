@@ -26,7 +26,7 @@ function dataRowAtPoint(e) {
 function dataValueText(value) {
   if (value == null) return 'NULL';
   const s = String(value);
-  return /[|#\n\r]|^\s|\s$/.test(s) ? `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'` : s;
+  return /[,|#\n\r]|^\s|\s$/.test(s) ? `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'` : s;
 }
 
 function referenceValues(c) {
@@ -141,7 +141,7 @@ function saveDataEditor() {
   const indent = dataEdit.row ? lines[lineIndex].match(/^\s*/)?.[0] ?? '    ' : '    ';
   histBegin('edit data');
   if (dataEdit.row) {
-    const next = `${indent}${values.map(dataValueText).join(' | ')}`;
+    const next = `${indent}${values.map(dataValueText).join(', ')}`;
     if (lines[lineIndex] === next) { histCommit(); return closeDataEditor(); }
     lines[lineIndex] = next;
   } else {
@@ -154,7 +154,7 @@ function saveDataEditor() {
     for (let i = tableStart + 1; i < tableEnd; i++) {
       if (/^\s*@data\s*$/i.test(lines[i])) { dataLine = i; break; }
     }
-    const rowText = `    ${values.map(dataValueText).join(' | ')}`;
+    const rowText = `    ${values.map(dataValueText).join(', ')}`;
     if (dataLine < 0) lines.splice(tableEnd, 0, '  @data', rowText);
     else lines.splice(dataLine + 1, 0, rowText);
   }
