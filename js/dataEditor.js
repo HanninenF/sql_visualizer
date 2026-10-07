@@ -38,8 +38,17 @@ function referenceValues(c) {
     .map(String))];
 }
 
-function generatedValue(table, c, refs) {
+function generatedValue(table, c, refs, index) {
   if (refs.length) return refs[0];
+  try {
+    const swedish = SWEDISH.test(low(table.name + ' ' + table.cols.map(col => col.name).join(' ')));
+    const person = {
+      first: nth(W.first[swedish ? 1 : 0], `${table.name}#f`, index),
+      last: nth(W.last[swedish ? 1 : 0], `${table.name}#l`, index),
+    };
+    const value = sampleValue(table, c, index, swedish, person);
+    if (value != null && value !== '') return String(value);
+  } catch { /* fall back to a small safe example below */ }
   const name = c.name.toLowerCase();
   const type = (c.effType ?? c.type ?? '').toLowerCase();
   if (c.isPk && /int|serial/.test(type)) return '1';
@@ -124,7 +133,8 @@ dataFields.addEventListener('click', e => {
   if (!button || !dataEdit) return;
   const i = +button.dataset.col, c = dataEdit.table.cols[i], refs = referenceValues(c);
   const control = dataFields.querySelector(`[data-col="${i}"]`);
-  control.value = generatedValue(dataEdit.table, c, refs);
+  dataEdit.exampleIndex = (dataEdit.exampleIndex ?? 0) + 1;
+  control.value = generatedValue(dataEdit.table, c, refs, dataEdit.exampleIndex);
 });
 $('#dataCancel').onclick = closeDataEditor;
 $('#dataSave').onclick = saveDataEditor;
