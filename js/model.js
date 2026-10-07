@@ -36,7 +36,7 @@ function sqlType(t) {
 }
 
 // ─── Text syntax → model ─────────────────────────────────────────────────────
-// model: { tables: [{ name, line, cols: [{ name, type, pk, nullable, unique, ref, refCol, line }] }] }
+// model: { tables: [{ name, line, cols: [...], dataRows: [{ values, line }] }] }
 // ref/refCol: "-> Table" (its primary key, refCol null) or "-> Table.Column"
 
 const FLAG = /^\(?(pk|null|unique|index)\)?$/i;
@@ -48,10 +48,12 @@ const indexName = (table, cols) => `idx_${table}_${cols.join('_')}`;
 function parseText(src) {
   const tables = [], problems = [];
   let cur = null;
+  let dataIndent = -1;
   src.split('\n').forEach((raw, i) => {
     const line = i + 1;
     const code = raw.replace(/#.*$/, '');
     if (!code.trim()) return;
+    const indent = raw.match(/^\s*/)[0].length;
 
     if (!/^\s/.test(code)) {
       const name = code.trim().replace(/:$/, '');
@@ -65,7 +67,8 @@ function parseText(src) {
         cur = { name, cols: [], indexes: [] };
         return;
       }
-      cur = { name, line, cols: [], indexes: [] };
+      cur = { name, line, cols: [], indexes: [], dataRows: [] };
+      dataIndent = -1;
       tables.push(cur);
       return;
     }
@@ -74,6 +77,32 @@ function parseText(src) {
       problems.push(problem(line, 'Column outside a table. Write a table name (without indentation) first.'));
       return;
     }
+
+    if (cur.dataRows && /^\s*@data\s*$/i.test(code)) {
+      dataIndent = indent;
+      return;
+    }
+
+    // Data rows are pipe-separated and indented one level below @data.
+    // Values are kept as strings here; sample.js applies SQL type semantics later.
+    if (dataIndent >= 0 && indent > dataIndent) {
+      const values = code.trim().split('|').map(v => {
+        const value = v.trim();
+        if (/^null$/i.test(value)) return null;
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+          return value.slice(1, -1).replace(/\\([\\"'])/g, '$1');
+        }
+        return value;
+      });
+      if (!values.length || values.every(v => v === '')) return;
+      if (values.length !== cur.cols.length) {
+        problems.push(problem(line, `${cur.name} data row has ${values.length} values, but the table has ${cur.cols.length} columns`));
+      } else {
+        cur.dataRows.push({ values, line });
+      }
+      return;
+    }
+    dataIndent = -1;
 
     const im = code.match(INDEX_LINE);
     if (im) {
