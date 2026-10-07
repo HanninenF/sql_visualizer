@@ -29,9 +29,11 @@ function dataValueText(value) {
 }
 
 function referenceValues(c) {
-  if (!c.target || !c.targetCol) return [];
-  return [...new Set((sampleData(model.tables).get(c.target) ?? [])
-    .map(row => row.values.get(c.targetCol))
+  const target = c.target ?? model.tables.find(t => t.name.toLowerCase() === c.ref?.toLowerCase());
+  const targetCol = c.targetCol ?? target?.pkCols?.[0];
+  if (!target || !targetCol) return [];
+  return [...new Set((sampleData(model.tables).get(target) ?? [])
+    .map(row => row.values.get(targetCol))
     .filter(value => value != null)
     .map(String))];
 }
@@ -45,9 +47,11 @@ function openDataEditor(tableName, rowIndex) {
   dataFields.innerHTML = table.cols.map((c, i) => {
     const value = row?.values[i] ?? '';
     const refs = referenceValues(c);
-    const control = refs.length
-      ? `<select data-col="${i}"><option value="">NULL</option>${refs.map(v =>
-          `<option value="${esc(v)}"${String(value) === v ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select>`
+    const isReference = !!c.ref || !!c.target;
+    const control = isReference
+      ? `<select data-col="${i}"><option value="">NULL</option>${refs.length ? refs.map(v =>
+          `<option value="${esc(v)}"${String(value) === v ? ' selected' : ''}>${esc(v)}</option>`).join('')
+        : `<option disabled>No available values</option>`}</select>`
       : `<input type="text" data-col="${i}" value="${esc(value)}" autocomplete="off" spellcheck="false">`;
     return `<label class="field data-field"><span>${esc(c.name)}</span>${control}</label>`;
   }).join('');
