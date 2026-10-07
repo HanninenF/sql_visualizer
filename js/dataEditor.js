@@ -169,9 +169,14 @@ function saveDataEditor() {
     else lines.splice(dataLine + 1, 0, rowText);
   }
   state.text = lines.join('\n');
-  ta.value = state.text;
   state.sqlStale = true;
   state.textStale = false;
+  if (state.mode === 'sql') {
+    regenerate('sql');
+    ta.value = state.sql;
+  } else {
+    ta.value = state.text;
+  }
   update();
   histCommit();
   saveState();
