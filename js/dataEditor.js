@@ -30,13 +30,21 @@ function dataValueText(value) {
 }
 
 function referenceValues(c) {
+  return referenceOptions(c).map(option => option.value);
+}
+
+function referenceOptions(c) {
   const target = c.target ?? model.tables.find(t => t.name.toLowerCase() === c.ref?.toLowerCase());
   const targetCol = c.targetCol ?? target?.pkCols?.[0];
   if (!target || !targetCol) return [];
-  return [...new Set((sampleData(model.tables).get(target) ?? [])
-    .map(row => row.values.get(targetCol))
-    .filter(value => value != null)
-    .map(String))];
+  const nameCol = target.cols.find(col => /^(name|namn)$/i.test(col.name));
+  return [...new Map((sampleData(model.tables).get(target) ?? [])
+    .map(row => {
+      const value = row.values.get(targetCol);
+      const name = nameCol ? row.values.get(nameCol) : null;
+      return value == null ? null : [String(value), { value: String(value), name: name == null ? '' : String(name) }];
+    })
+    .filter(Boolean)).values()];
 }
 
 function generatedValue(table, c, refs, index, currentValues = []) {
@@ -92,11 +100,12 @@ function openDataEditor(tableName, rowIndex) {
   $('#dataDlgTitle').textContent = row ? `Edit ${table.name} data` : `Add data to ${table.name}`;
   dataFields.innerHTML = table.cols.map((c, i) => {
     const value = row?.values[i] ?? '';
-    const refs = referenceValues(c);
+    const options = referenceOptions(c);
+    const refs = options.map(option => option.value);
     const isReference = !!c.ref || !!c.target;
     const control = isReference
-      ? `<select data-col="${i}"><option value="">NULL</option>${refs.length ? refs.map(v =>
-          `<option value="${esc(v)}"${String(value) === v ? ' selected' : ''}>${esc(v)}</option>`).join('')
+      ? `<select class="data-ref" data-col="${i}"><option value="">NULL</option>${options.length ? options.map(option =>
+          `<option value="${esc(option.value)}"${String(value) === option.value ? ' selected' : ''}>${esc(option.value)}${option.name ? ` — ${esc(option.name)}` : ''}</option>`).join('')
         : `<option disabled>No available values</option>`}</select>`
       : `<input type="text" data-col="${i}" value="${esc(value)}" autocomplete="off" spellcheck="false">`;
     return `<label class="field data-field"><span>${esc(c.name)}</span>${control}` +
