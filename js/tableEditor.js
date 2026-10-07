@@ -150,8 +150,7 @@ function refreshHints() {
     if (!autoAllowed) c.autoInc = false;
     auto.checked = autoAllowed && (c.autoInc || implicitAuto);
     auto.disabled = !autoAllowed || implicitAuto;
-    auto.parentNode.title = !autoAllowed ? 'AUTO_INCREMENT is only available for an integer Id' :
-      implicitAuto ? 'Id is AUTO_INCREMENT automatically' : 'AUTO_INCREMENT';
+    auto.parentNode.title = !autoAllowed ? 'AUTO_INCREMENT is only available for an integer Id' : 'AUTO_INCREMENT';
     row.querySelector('.c-type').placeholder = isId || c.ref ? 'int' : 'vc';
   }
 }
