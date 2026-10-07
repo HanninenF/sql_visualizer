@@ -419,6 +419,7 @@ main { flex: 1; display: flex; min-height: 0; }
 }
 #canvas .tbl { cursor: grab; }
 #canvas .tbl .row { cursor: pointer; }
+#canvas .tbl .empty-data-row { cursor: pointer; }
 #canvas.panning, #canvas.dragging, #canvas.dragging .tbl, #canvas.dragging .row { cursor: grabbing; }
 
 .card {

@@ -581,7 +581,13 @@ function dataBoxBody(t, b, interactive) {
   let s = cols.map((c, i) => `<text class="dhead${kind(c)}" x="${xs[i]}" y="${ch}">` +
     (c.target ? `<title>${esc(c.name)} → ${esc(c.target.name)}.${esc(c.targetCol.name)}</title>` : '') + `${esc(c.name)}</text>`).join('');
   s += `<line class="sep" x1="${PAD_X}" y1="${HEAD_H + 6 + COLHEAD_H - .5}" x2="${b.w - PAD_X}" y2="${HEAD_H + 6 + COLHEAD_H - .5}"/>`;
-  if (!cells.length) return s + `<text class="dcell null" x="${PAD_X}" y="${dataRowY(0)}">no rows</text>`;
+  if (!cells.length) {
+    const y = dataRowY(0);
+    s += `<g class="drow empty-data-row" data-row="-1">`;
+    if (interactive) s += `<rect class="hit" x="1" y="${y - DATA_H / 2}" width="${b.w - 2}" height="${DATA_H}"/>`;
+    s += `<text class="dcell null" x="${PAD_X}" y="${y}">no rows</text></g>`;
+    return s;
+  }
   cells.forEach((row, k) => {
     const y = dataRowY(k);
     s += `<g class="drow" data-row="${k}">`;
