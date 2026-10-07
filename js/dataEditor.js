@@ -139,6 +139,7 @@ function saveDataEditor() {
     else lines.splice(dataLine + 1, 0, rowText);
   }
   state.text = lines.join('\n');
+  ta.value = state.text;
   state.textStale = true;
   update();
   histCommit();
