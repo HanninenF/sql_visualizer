@@ -28,19 +28,32 @@ function dataValueText(value) {
   return /[|#\n\r]|^\s|\s$/.test(s) ? `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'` : s;
 }
 
+function referenceValues(c) {
+  if (!c.target || !c.targetCol) return [];
+  return [...new Set((sampleData(model.tables).get(c.target) ?? [])
+    .map(row => row.values.get(c.targetCol))
+    .filter(value => value != null)
+    .map(String))];
+}
+
 function openDataEditor(tableName, rowIndex) {
   const table = model.tables.find(t => t.name === tableName);
   const row = rowIndex == null ? null : table?.dataRows?.[rowIndex];
   if (!table || (rowIndex != null && !row)) return;
   dataEdit = { table, rowIndex, row };
   $('#dataDlgTitle').textContent = row ? `Edit ${table.name} data` : `Add data to ${table.name}`;
-  dataFields.innerHTML = table.cols.map((c, i) =>
-    `<label class="field data-field"><span>${esc(c.name)}</span>` +
-    `<input type="text" data-col="${i}" value="${esc(row?.values[i] ?? '')}" autocomplete="off" spellcheck="false"></label>`
-  ).join('');
+  dataFields.innerHTML = table.cols.map((c, i) => {
+    const value = row?.values[i] ?? '';
+    const refs = referenceValues(c);
+    const control = refs.length
+      ? `<select data-col="${i}"><option value="">NULL</option>${refs.map(v =>
+          `<option value="${esc(v)}"${String(value) === v ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select>`
+      : `<input type="text" data-col="${i}" value="${esc(value)}" autocomplete="off" spellcheck="false">`;
+    return `<label class="field data-field"><span>${esc(c.name)}</span>${control}</label>`;
+  }).join('');
   dataError.textContent = '';
   dataDlg.hidden = false;
-  dataFields.querySelector('input')?.focus();
+  dataFields.querySelector('input, select')?.focus();
 }
 
 function closeDataEditor() {
@@ -50,7 +63,7 @@ function closeDataEditor() {
 
 function saveDataEditor() {
   if (!dataEdit) return;
-  const inputs = [...dataFields.querySelectorAll('input[data-col]')];
+  const inputs = [...dataFields.querySelectorAll('[data-col]')];
   const values = inputs.map(input => input.value.trim() === '' ? null : input.value);
   const lines = state.text.split('\n');
   const lineIndex = dataEdit.row ? dataEdit.row.line - 1 : -1;
