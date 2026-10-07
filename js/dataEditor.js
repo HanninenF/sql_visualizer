@@ -9,6 +9,18 @@ const dataFields = $('#dataFields');
 const dataError = $('#dataError');
 let dataEdit = null;
 
+function dataRowAtPoint(e) {
+  const p = toWorld(e);
+  for (const [table, box] of geometry.boxes) {
+    if (!box.data || p.x < box.x || p.x > box.x + box.w || p.y < box.y || p.y > box.y + box.h) continue;
+    const localY = p.y - box.y;
+    const firstRow = HEAD_H + 6 + COLHEAD_H;
+    const rowIndex = Math.floor((localY - firstRow) / DATA_H);
+    if (rowIndex >= 0 && rowIndex < (table.dataRows?.length ?? 0)) return { table, rowIndex };
+  }
+  return null;
+}
+
 function dataValueText(value) {
   if (value == null) return 'NULL';
   const s = String(value);
@@ -64,9 +76,9 @@ $('#dataSave').onclick = saveDataEditor;
 dataDlg.addEventListener('click', e => { if (e.target === dataDlg) closeDataEditor(); });
 
 svg.addEventListener('dblclick', e => {
-  const underPointer = document.elementFromPoint(e.clientX, e.clientY);
-  const row = underPointer?.closest('.drow'), table = underPointer?.closest('.tbl');
-  if (!row || !table) return;
+  const hit = dataRowAtPoint(e);
+  if (!hit) return;
   e.preventDefault();
-  openDataEditor(table.dataset.t, +row.dataset.row);
+  e.stopImmediatePropagation();
+  openDataEditor(hit.table.name, hit.rowIndex);
 });
