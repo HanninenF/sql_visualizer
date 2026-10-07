@@ -144,6 +144,11 @@ function refreshHints() {
     const nul = row.querySelector('.c-null');
     nul.disabled = c.pk || autoPk;
     if (nul.disabled) { nul.checked = false; c.nullable = false; }
+    const unique = row.querySelector('.c-unique');
+    const pkImpliesUnique = c.pk || autoPk;
+    unique.checked = c.unique || pkImpliesUnique;
+    unique.disabled = pkImpliesUnique;
+    unique.parentNode.title = pkImpliesUnique ? 'UNIQUE (implied by primary key)' : 'UNIQUE';
     const auto = row.querySelector('.c-auto');
     const autoAllowed = isId && INT_TYPES.has(normType(c.type || 'int').split(/[ (]/)[0]);
     const implicitAuto = autoAllowed && autoPk;
