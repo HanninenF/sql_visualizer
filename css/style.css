@@ -524,6 +524,8 @@ body.presenting .card-tl, body.presenting #storageNotice, body.presenting #selec
 .data-field { justify-content: space-between; }
 .data-field input, .data-field select { width: 280px; max-width: 280px; height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--box-bg); }
 .data-field select { cursor: pointer; }
+.data-generate { width: 30px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--muted); cursor: pointer; }
+.data-generate:hover { border-color: var(--line2); color: var(--fg); }
 .col-grid, .col-row {
   display: grid; gap: 6px; align-items: center;
   grid-template-columns: minmax(110px, 1.2fr) minmax(90px, 1fr) 34px 34px 46px 40px minmax(120px, 1.1fr) 90px;

@@ -38,6 +38,20 @@ function referenceValues(c) {
     .map(String))];
 }
 
+function generatedValue(table, c, refs) {
+  if (refs.length) return refs[0];
+  const name = c.name.toLowerCase();
+  const type = (c.effType ?? c.type ?? '').toLowerCase();
+  if (c.isPk && /int|serial/.test(type)) return '1';
+  if (/date/.test(type)) return '2025-01-01';
+  if (/bool/.test(type)) return '1';
+  if (/email|e.?post/.test(name)) return 'fredrik@example.com';
+  if (/name|namn/.test(name)) return 'Fredrik';
+  if (/grade|betyg/.test(name)) return 'A';
+  if (/int|decimal|numeric|float|double/.test(type)) return '1';
+  return `${table.name} 1`;
+}
+
 function openDataEditor(tableName, rowIndex) {
   const table = model.tables.find(t => t.name === tableName);
   const row = rowIndex == null ? null : table?.dataRows?.[rowIndex];
@@ -53,7 +67,8 @@ function openDataEditor(tableName, rowIndex) {
           `<option value="${esc(v)}"${String(value) === v ? ' selected' : ''}>${esc(v)}</option>`).join('')
         : `<option disabled>No available values</option>`}</select>`
       : `<input type="text" data-col="${i}" value="${esc(value)}" autocomplete="off" spellcheck="false">`;
-    return `<label class="field data-field"><span>${esc(c.name)}</span>${control}</label>`;
+    return `<label class="field data-field"><span>${esc(c.name)}</span>${control}` +
+      `<button type="button" class="data-generate" data-col="${i}" title="Generate example">↻</button></label>`;
   }).join('');
   dataError.textContent = '';
   dataDlg.hidden = false;
@@ -103,6 +118,13 @@ function saveDataEditor() {
 dataFields.addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); saveDataEditor(); }
   if (e.key === 'Escape') { e.preventDefault(); closeDataEditor(); }
+});
+dataFields.addEventListener('click', e => {
+  const button = e.target.closest('.data-generate');
+  if (!button || !dataEdit) return;
+  const i = +button.dataset.col, c = dataEdit.table.cols[i], refs = referenceValues(c);
+  const control = dataFields.querySelector(`[data-col="${i}"]`);
+  control.value = generatedValue(dataEdit.table, c, refs);
 });
 $('#dataCancel').onclick = closeDataEditor;
 $('#dataSave').onclick = saveDataEditor;
