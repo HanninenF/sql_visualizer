@@ -73,7 +73,7 @@ function generatedValue(table, c, refs, index, currentValues = []) {
 
 function syncGeneratedEmails() {
   if (!dataEdit) return;
-  const fields = [...dataFields.querySelectorAll('[data-col]')];
+  const fields = [...dataFields.querySelectorAll('input[data-col], select[data-col]')];
   const currentValues = fields.map(field => field.value);
   dataEdit.table.cols.forEach((c, i) => {
     if (!/e.?mail|epost/i.test(c.name)) return;
@@ -155,7 +155,7 @@ dataFields.addEventListener('click', e => {
   if (!button || !dataEdit) return;
   const i = +button.dataset.col, c = dataEdit.table.cols[i], refs = referenceValues(c);
   const control = dataFields.querySelector(`[data-col="${i}"]`);
-  const currentValues = [...dataFields.querySelectorAll('[data-col]')].map(field => field.value);
+  const currentValues = [...dataFields.querySelectorAll('input[data-col], select[data-col]')].map(field => field.value);
   dataEdit.exampleIndex = (dataEdit.exampleIndex ?? 0) + 1;
   control.value = generatedValue(dataEdit.table, c, refs, dataEdit.exampleIndex, currentValues);
   syncGeneratedEmails();
