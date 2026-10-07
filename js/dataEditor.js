@@ -38,11 +38,12 @@ function referenceOptions(c) {
   const targetCol = c.targetCol ?? target?.pkCols?.[0];
   if (!target || !targetCol) return [];
   const nameCol = target.cols.find(col => /^(name|namn)$/i.test(col.name));
+  const hues = rowHues(model.tables);
   return [...new Map((sampleData(model.tables).get(target) ?? [])
-    .map(row => {
+    .map((row, index) => {
       const value = row.values.get(targetCol);
       const name = nameCol ? row.values.get(nameCol) : null;
-      return value == null ? null : [String(value), { value: String(value), name: name == null ? '' : String(name) }];
+      return value == null ? null : [String(value), { value: String(value), name: name == null ? '' : String(name), hue: hues.get(`${target.name}#${index}`) ?? 0 }];
     })
     .filter(Boolean)).values()];
 }
@@ -104,9 +105,12 @@ function openDataEditor(tableName, rowIndex) {
     const refs = options.map(option => option.value);
     const isReference = !!c.ref || !!c.target;
     const control = isReference
-      ? `<select class="data-ref" data-col="${i}"><option value="">NULL</option>${options.length ? options.map(option =>
-          `<option value="${esc(option.value)}"${String(value) === option.value ? ' selected' : ''}>${esc(option.value)}${option.name ? ` — ${esc(option.name)}` : ''}</option>`).join('')
-        : `<option disabled>No available values</option>`}</select>`
+      ? `<div class="data-ref-picker"><input type="hidden" data-col="${i}" value="${esc(value)}">` +
+        `<button type="button" class="data-ref-current" data-ref-toggle="${i}">${referenceLabel(options.find(option => option.value === String(value)))}</button>` +
+        `<div class="data-ref-menu" data-ref-menu="${i}" hidden>` +
+        `<button type="button" data-ref-option="${i}" data-value="">NULL</button>` +
+        (options.length ? options.map(option => `<button type="button" data-ref-option="${i}" data-value="${esc(option.value)}">${referenceLabel(option)}</button>`).join('') : '<span class="data-ref-empty">No available values</span>') +
+        `</div></div>`
       : `<input type="text" data-col="${i}" value="${esc(value)}" autocomplete="off" spellcheck="false">`;
     return `<label class="field data-field"><span>${esc(c.name)}</span>${control}` +
       `<button type="button" class="data-generate" data-col="${i}" title="Generate example">↻</button></label>`;
@@ -114,6 +118,12 @@ function openDataEditor(tableName, rowIndex) {
   dataError.textContent = '';
   dataDlg.hidden = false;
   dataFields.querySelector('input, select')?.focus();
+}
+
+function referenceLabel(option) {
+  if (!option) return '<span class="ref-name">NULL</span>';
+  return `<span class="ref-badge" style="--h:${option.hue}">${esc(option.value)}</span>` +
+    (option.name ? `<span class="ref-name">${esc(option.name)}</span>` : '');
 }
 
 function closeDataEditor() {
@@ -162,6 +172,21 @@ dataFields.addEventListener('keydown', e => {
   if (e.key === 'Escape') { e.preventDefault(); closeDataEditor(); }
 });
 dataFields.addEventListener('click', e => {
+  const toggle = e.target.closest('[data-ref-toggle]');
+  if (toggle) {
+    const menu = dataFields.querySelector(`[data-ref-menu="${toggle.dataset.refToggle}"]`);
+    dataFields.querySelectorAll('.data-ref-menu').forEach(other => { if (other !== menu) other.hidden = true; });
+    menu.hidden = !menu.hidden;
+    return;
+  }
+  const option = e.target.closest('[data-ref-option]');
+  if (option) {
+    const i = +option.dataset.refOption;
+    dataFields.querySelector(`input[data-col="${i}"]`).value = option.dataset.value;
+    dataFields.querySelector(`[data-ref-toggle="${i}"]`).innerHTML = option.innerHTML;
+    dataFields.querySelector(`[data-ref-menu="${i}"]`).hidden = true;
+    return;
+  }
   const button = e.target.closest('.data-generate');
   if (!button || !dataEdit) return;
   const i = +button.dataset.col, c = dataEdit.table.cols[i], refs = referenceValues(c);
@@ -169,6 +194,10 @@ dataFields.addEventListener('click', e => {
   const currentValues = [...dataFields.querySelectorAll('input[data-col], select[data-col]')].map(field => field.value);
   dataEdit.exampleIndex = (dataEdit.exampleIndex ?? 0) + 1;
   control.value = generatedValue(dataEdit.table, c, refs, dataEdit.exampleIndex, currentValues);
+  if (c.ref || c.target) {
+    const selected = referenceOptions(c).find(option => option.value === control.value);
+    dataFields.querySelector(`[data-ref-toggle="${i}"]`).innerHTML = referenceLabel(selected);
+  }
   syncGeneratedEmails();
 });
 dataFields.addEventListener('input', e => {
