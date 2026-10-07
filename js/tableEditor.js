@@ -146,9 +146,9 @@ function refreshHints() {
     if (nul.disabled) { nul.checked = false; c.nullable = false; }
     const unique = row.querySelector('.c-unique');
     const pkImpliesUnique = c.pk || autoPk;
-    unique.checked = c.unique || pkImpliesUnique;
+    unique.checked = !pkImpliesUnique && c.unique;
     unique.disabled = pkImpliesUnique;
-    unique.parentNode.title = pkImpliesUnique ? 'UNIQUE (implied by primary key)' : 'UNIQUE';
+    unique.parentNode.title = pkImpliesUnique ? 'UNIQUE is implied by primary key' : 'UNIQUE';
     const auto = row.querySelector('.c-auto');
     const autoAllowed = isId && INT_TYPES.has(normType(c.type || 'int').split(/[ (]/)[0]);
     const implicitAuto = autoAllowed && autoPk;
@@ -365,7 +365,7 @@ function saveTable() {
     if (c.type) parts.push(c.type);
     if (c.pk) parts.push('pk');
     if (c.nullable) parts.push('null');
-    if (c.unique) parts.push('unique');
+    if (c.unique && !c.pk) parts.push('unique');
     if (c.index) parts.push('index');
     if (c.autoInc) parts.push('auto_increment');
     if (c.ref) {
