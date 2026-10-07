@@ -538,6 +538,7 @@ body.presenting .card-tl, body.presenting #storageNotice, body.presenting #selec
 .data-ref-empty { display: block; padding: 5px 6px; color: var(--muted); font-size: 12px; }
 .data-generate { width: 30px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--muted); cursor: pointer; }
 .data-generate:hover { border-color: var(--line2); color: var(--fg); }
+.data-generate-spacer { width: 30px; height: 30px; flex: 0 0 30px; }
 .col-grid, .col-row {
   display: grid; gap: 6px; align-items: center;
   grid-template-columns: minmax(110px, 1.2fr) minmax(90px, 1fr) 34px 34px 46px 40px 40px minmax(120px, 1.1fr) 90px;

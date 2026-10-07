@@ -123,7 +123,7 @@ function openDataEditor(tableName, rowIndex) {
         `</div></div>`
       : `<input type="text" data-col="${i}" value="${esc(value)}" autocomplete="off" spellcheck="false">`;
     return `<label class="field data-field"><span>${esc(c.name)}</span>${control}` +
-      (isAuto ? '' : `<button type="button" class="data-generate" data-col="${i}" title="Generate example">↻</button>`) + '</label>';
+      (isAuto ? '<span class="data-generate-spacer" aria-hidden="true"></span>' : `<button type="button" class="data-generate" data-col="${i}" title="Generate example">↻</button>`) + '</label>';
   }).join('');
   dataError.textContent = '';
   dataDlg.hidden = false;
