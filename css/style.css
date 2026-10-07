@@ -522,12 +522,12 @@ body.presenting .card-tl, body.presenting #storageNotice, body.presenting #selec
 .field { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-weight: 500; }
 .field input { max-width: 280px; }
 .data-field { justify-content: space-between; }
-.data-dlg { overflow: visible; }
+.data-dlg { position: relative; z-index: 100; overflow: visible; }
 .data-field input, .data-field select { width: 280px; max-width: 280px; height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--box-bg); }
 .data-ref-picker { position: relative; width: 280px; max-width: 280px; }
 .data-ref-current { display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--box-bg); cursor: pointer; text-align: left; }
 .data-ref-current:hover { border-color: var(--line2); }
-.data-ref-menu { position: absolute; z-index: 5; left: 0; right: 0; top: 34px; padding: 4px; border: 1px solid var(--line2); border-radius: 7px; background: var(--panel); box-shadow: var(--shadow); }
+.data-ref-menu { position: absolute; z-index: 1000; left: 0; right: 0; top: 34px; padding: 4px; border: 1px solid var(--line2); border-radius: 7px; background: var(--panel); box-shadow: var(--shadow); }
 .data-ref-menu button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 28px; padding: 3px 6px; border: 0; border-radius: 5px; background: transparent; color: var(--fg); cursor: pointer; text-align: left; }
 .data-ref-menu button:hover { background: var(--hover); }
 .ref-badge { min-width: 20px; padding: 2px 5px; border-radius: 4px; background: hsl(var(--h) var(--dv-s) var(--dv-l)); color: #fff; font: 600 11px var(--mono); text-align: center; }
