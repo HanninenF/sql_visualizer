@@ -170,7 +170,8 @@ function saveDataEditor() {
   }
   state.text = lines.join('\n');
   ta.value = state.text;
-  state.textStale = true;
+  state.sqlStale = true;
+  state.textStale = false;
   update();
   histCommit();
   saveState();
