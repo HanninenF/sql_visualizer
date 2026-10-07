@@ -39,7 +39,7 @@ function sqlType(t) {
 // model: { tables: [{ name, line, cols: [...], dataRows: [{ values, line }] }] }
 // ref/refCol: "-> Table" (its primary key, refCol null) or "-> Table.Column"
 
-const FLAG = /^\(?(pk|null|unique|index)\)?$/i;
+const FLAG = /^\(?(pk|null|unique|index|auto_increment)\)?$/i;
 // An index over one or more columns, on its own line in a table: "index (A, B)" or "index name (A, B)"
 const INDEX_LINE = /^\s+index\b\s*([\p{L}_][\p{L}\p{N}_$]*)?\s*\(([^)]*)\)?\s*$/iu;
 // The name an index gets in the SQL when none was given
@@ -154,7 +154,7 @@ function parseText(src) {
       problems.push(problem(line, `Column ${name} is defined twice in ${cur.name}`));
       return;
     }
-    const col = { name, type: null, pk: false, nullable: false, unique: false, ref, refCol, line };
+    const col = { name, type: null, pk: false, nullable: false, unique: false, autoInc: false, ref, refCol, line };
     const typeParts = [];
     for (const t of toks) {
       const f = t.match(FLAG);
@@ -162,6 +162,7 @@ function parseText(src) {
       else if (f[1].toLowerCase() === 'pk') col.pk = true;
       else if (f[1].toLowerCase() === 'null') col.nullable = true;
       else if (f[1].toLowerCase() === 'index') cur.indexes.push({ name: null, cols: [name], line });
+      else if (f[1].toLowerCase() === 'auto_increment') col.autoInc = true;
       else col.unique = true;
     }
     col.type = typeParts.join(' ') || null;
@@ -281,7 +282,9 @@ function resolve(tables, implicit = false) {
       }
       c.isPk = t.pkCols.includes(c);
       c.indexed = false;
-      c.autoInc = c.isPk && t.pkCols.length === 1 && isIdName(c.name) && INT_TYPES.has(c.effType.split(/[ (]/)[0]);
+      c.autoInc = c.autoInc || c.isPk && t.pkCols.length === 1 && isIdName(c.name) && INT_TYPES.has(c.effType.split(/[ (]/)[0]);
+      if (c.autoInc && (!c.isPk || !INT_TYPES.has(c.effType.split(/[ (]/)[0])))
+        problems.push(problem(c.line, 'AUTO_INCREMENT requires an integer primary key'));
       if (c.isPk && c.nullable) problems.push(problem(c.line, `${c.name} is a primary key and can't be null`));
     }
   }

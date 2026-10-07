@@ -288,10 +288,11 @@ function parseColumn(p, acc, warn, error) {
   let type = typeTok.v;
   if (p.isP('(')) type += '(' + tokText(p.group()) + ')';
   while (p.isW('UNSIGNED', 'SIGNED', 'ZEROFILL')) type += ' ' + p.next().v;
-  const col = { name: nameTok.v, type, notNull: false, unique: false, pk: false, line };
+  const col = { name: nameTok.v, type, notNull: false, unique: false, pk: false, autoInc: false, line };
   while (!p.done) {
     if (p.eatW('NOT')) { if (p.eatW('NULL')) col.notNull = true; continue; }
-    if (p.eatW('NULL', 'AUTO_INCREMENT')) continue;
+    if (p.eatW('NULL')) continue;
+    if (p.eatW('AUTO_INCREMENT')) { col.autoInc = true; continue; }
     if (p.eatW('UNIQUE')) { p.eatW('KEY'); col.unique = true; continue; }
     if (p.eatW('PRIMARY')) { p.eatW('KEY'); col.pk = true; continue; }
     if (p.eatW('KEY')) { col.pk = true; continue; }
@@ -332,6 +333,7 @@ function finalizeTable(acc, warn, error) {
     pk: !idIsPk && pkSet.has(lc(c.name)),
     nullable: !c.notNull && !pkSet.has(lc(c.name)) && !(c === id && !pkSet.size),
     unique: c.unique,
+    autoInc: c.autoInc,
     ref: null,
     refCol: null,
     line: c.line,
