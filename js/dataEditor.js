@@ -71,6 +71,18 @@ function generatedValue(table, c, refs, index, currentValues = []) {
   return `${table.name} 1`;
 }
 
+function syncGeneratedEmails() {
+  if (!dataEdit) return;
+  const fields = [...dataFields.querySelectorAll('[data-col]')];
+  const currentValues = fields.map(field => field.value);
+  dataEdit.table.cols.forEach((c, i) => {
+    if (!/e.?mail|epost/i.test(c.name)) return;
+    const control = fields[i];
+    if (!control || (control.value && !/@example\.com$/i.test(control.value))) return;
+    control.value = generatedValue(dataEdit.table, c, referenceValues(c), dataEdit.exampleIndex ?? 0, currentValues);
+  });
+}
+
 function openDataEditor(tableName, rowIndex) {
   const table = model.tables.find(t => t.name === tableName);
   const row = rowIndex == null ? null : table?.dataRows?.[rowIndex];
@@ -146,6 +158,11 @@ dataFields.addEventListener('click', e => {
   const currentValues = [...dataFields.querySelectorAll('[data-col]')].map(field => field.value);
   dataEdit.exampleIndex = (dataEdit.exampleIndex ?? 0) + 1;
   control.value = generatedValue(dataEdit.table, c, refs, dataEdit.exampleIndex, currentValues);
+  syncGeneratedEmails();
+});
+dataFields.addEventListener('input', e => {
+  const col = dataEdit?.table.cols[+e.target.dataset.col];
+  if (col && /name|namn|first|for|last|sur|efter/i.test(col.name)) syncGeneratedEmails();
 });
 $('#dataCancel').onclick = closeDataEditor;
 $('#dataSave').onclick = saveDataEditor;
