@@ -175,8 +175,14 @@ dataFields.addEventListener('click', e => {
   const toggle = e.target.closest('[data-ref-toggle]');
   if (toggle) {
     const menu = dataFields.querySelector(`[data-ref-menu="${toggle.dataset.refToggle}"]`);
-    dataFields.querySelectorAll('.data-ref-menu').forEach(other => { if (other !== menu) other.hidden = true; });
+    dataFields.querySelectorAll('.data-ref-menu').forEach(other => {
+      if (other !== menu) {
+        other.hidden = true;
+        dataFields.querySelector(`[data-ref-toggle="${other.dataset.refMenu}"]`)?.classList.remove('open');
+      }
+    });
     menu.hidden = !menu.hidden;
+    toggle.classList.toggle('open', !menu.hidden);
     return;
   }
   const option = e.target.closest('[data-ref-option]');
@@ -184,6 +190,7 @@ dataFields.addEventListener('click', e => {
     const i = +option.dataset.refOption;
     dataFields.querySelector(`input[data-col="${i}"]`).value = option.dataset.value;
     dataFields.querySelector(`[data-ref-toggle="${i}"]`).innerHTML = option.innerHTML;
+    dataFields.querySelector(`[data-ref-toggle="${i}"]`).classList.remove('open');
     dataFields.querySelector(`[data-ref-menu="${i}"]`).hidden = true;
     return;
   }
