@@ -10,8 +10,6 @@ function hlTextLine(line) {
   const com = hash >= 0 ? `<span class="h-com">${esc(line.slice(hash))}</span>` : '';
   if (!code.trim()) return esc(code) + com;
   if (!/^\s/.test(code)) return `<span class="h-tbl">${esc(code)}</span>` + com;
-  const im = code.match(/^(\s+)(index)(\b[\s\S]*)$/i);
-  if (im && INDEX_LINE.test(code)) return esc(im[1]) + `<span class="h-flag">${im[2]}</span><span class="h-type">${esc(im[3])}</span>` + com;
   const ai = code.indexOf('->');
   const left = ai >= 0 ? code.slice(0, ai) : code;
   const m = left.match(/^(\s*)(\S*)([\s\S]*)$/);
