@@ -255,7 +255,21 @@ readDoc(docs.active);
 // the existing localStorage snapshot; later runs restore SQLite's snapshot
 // before the app continues using localStorage as its synchronous cache.
 window.sqliteStorageReady?.then(storage => {
-  if (!storage || storage.migrated || storage.sameSnapshot(storage.snapshot, storage.localSnapshot())) return;
+  const restoreFlag = 'sqlviz.sqliteRestorePending';
+  if (!storage || storage.migrated) {
+    sessionStorage.removeItem(restoreFlag);
+    return;
+  }
+  if (storage.sameSnapshot(storage.snapshot, storage.localSnapshot())) {
+    sessionStorage.removeItem(restoreFlag);
+    return;
+  }
+  if (sessionStorage.getItem(restoreFlag) === '1') {
+    sessionStorage.removeItem(restoreFlag);
+    console.warn('SQLite and localStorage still differ after one restore; reload stopped.');
+    return;
+  }
+  sessionStorage.setItem(restoreFlag, '1');
   storage.replaceLocalSnapshot(storage.snapshot);
   window.location.reload();
 });
