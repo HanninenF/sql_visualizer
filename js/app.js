@@ -269,12 +269,10 @@ window.sqliteStorageReady?.then(async storage => {
     sessionStorage.removeItem(restoreFlag);
     return;
   }
-  const dirtyToken = localStorage.getItem(SQLITE_DIRTY_KEY);
-  if (dirtyToken) {
-    reportSqliteConflicts(await storage.save(storage.localSnapshot()));
-    if (localStorage.getItem(SQLITE_DIRTY_KEY) === dirtyToken) localStorage.removeItem(SQLITE_DIRTY_KEY);
-    return;
-  }
+  // An existing SQLite snapshot is authoritative. A stale dirty flag can be
+  // left behind by an older browser cache and must not overwrite the durable
+  // database during startup. New edits are persisted through persist()/save().
+  localStorage.removeItem(SQLITE_DIRTY_KEY);
   if (storage.sameSnapshot(storage.snapshot, storage.localSnapshot())) {
     sessionStorage.removeItem(restoreFlag);
     return;
