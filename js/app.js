@@ -258,7 +258,7 @@ readDoc(docs.active);
 window.sqliteStorageReady?.then(async storage => {
   const restoreFlag = 'sqlviz.sqliteRestorePending';
   if (!storage) {
-    setTimeout(() => toast('SQLite could not be loaded. Using localStorage fallback.'), 0);
+    setTimeout(() => toast('Disk storage is unavailable. Start the app with "npm start"; localStorage fallback is active.'), 0);
     return;
   }
   if (storage.migrated) {

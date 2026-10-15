@@ -43,7 +43,15 @@
   }
 
   async function initialize() {
-    const loaded = await request('/api/storage');
+    let loaded;
+    try {
+      loaded = await request('/api/storage');
+    } catch (error) {
+      if (location.protocol === 'file:' || !location.pathname.startsWith('/')) {
+        throw new Error('Start the app with "npm start" to enable disk-backed SQLite storage.');
+      }
+      throw error;
+    }
     let baseSnapshot = loaded.snapshot || {};
     let saveChain = Promise.resolve();
     const api = {

@@ -114,6 +114,10 @@ async function handleStatic(request, response, pathname) {
   const relative = pathname === '/' ? 'index.html' : decodeURIComponent(pathname.slice(1));
   const filePath = path.resolve(rootDir, relative);
   if (filePath !== rootDir && !filePath.startsWith(rootDir + path.sep)) return sendJson(response, 403, { error: 'Forbidden' });
+  const relativeParts = path.relative(rootDir, filePath).split(path.sep);
+  const publicFile = relativeParts.length === 1 && ['index.html', 'icon.svg'].includes(relativeParts[0]);
+  const publicDirectory = ['css', 'js', 'docs'].includes(relativeParts[0]);
+  if (!publicFile && !publicDirectory) return sendJson(response, 403, { error: 'Forbidden' });
   try {
     const stat = await fs.promises.stat(filePath);
     if (!stat.isFile()) throw new Error('Not a file');
@@ -134,6 +138,16 @@ const server = createServer(async (request, response) => {
     if (!response.headersSent) sendJson(response, 400, { error: error.message || 'Bad request' });
     else response.destroy();
   }
+});
+
+server.on('error', error => {
+  if (error.code === 'EADDRINUSE' || error.code === 'EACCES') {
+    console.error(`Could not start SQL Visualizer on port ${port}. Stop Live Server or choose another port with PORT=5501.`);
+    process.exitCode = 1;
+    return;
+  }
+  console.error('SQL Visualizer server error:', error);
+  process.exitCode = 1;
 });
 
 server.listen(port, '127.0.0.1', () => {
