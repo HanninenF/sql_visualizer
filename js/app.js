@@ -256,7 +256,11 @@ readDoc(docs.active);
 // before the app continues using localStorage as its synchronous cache.
 window.sqliteStorageReady?.then(storage => {
   const restoreFlag = 'sqlviz.sqliteRestorePending';
-  if (!storage || storage.migrated) {
+  if (!storage) {
+    setTimeout(() => toast('SQLite could not be loaded. Using localStorage fallback.'), 0);
+    return;
+  }
+  if (storage.migrated) {
     sessionStorage.removeItem(restoreFlag);
     return;
   }
@@ -266,25 +270,46 @@ window.sqliteStorageReady?.then(storage => {
   }
   if (sessionStorage.getItem(restoreFlag) === '1') {
     sessionStorage.removeItem(restoreFlag);
+    toast('SQLite restore needs attention. The current browser cache was kept.');
     console.warn('SQLite and localStorage still differ after one restore; reload stopped.');
     return;
   }
   sessionStorage.setItem(restoreFlag, '1');
   storage.replaceLocalSnapshot(storage.snapshot);
   window.location.reload();
+}).catch(error => {
+  sessionStorage.removeItem('sqlviz.sqliteRestorePending');
+  console.warn('SQLite restore failed; keeping the current browser cache.', error);
+  setTimeout(() => toast('SQLite restore failed. The current browser cache was kept.'), 0);
 });
 
-// Saving. A failed save (storage full) is reported once instead of losing work silently.
+// Saving. A failed save is reported once instead of losing work silently.
 let storageWarned = false;
 let sqliteSaveTimer = 0;
-function queueSqliteSave() {
-  clearTimeout(sqliteSaveTimer);
-  sqliteSaveTimer = setTimeout(async () => {
+let sqliteSavePromise = Promise.resolve();
+let sqliteSaveWarned = false;
+function saveSqliteNow() {
+  sqliteSavePromise = sqliteSavePromise.then(async () => {
     const storage = await window.sqliteStorageReady;
     if (!storage) return;
-    try { await storage.save(storage.localSnapshot()); }
-    catch (error) { console.warn('Could not save SQLite database.', error); }
-  }, 350);
+    await storage.save(storage.localSnapshot());
+  }).catch(error => {
+    console.warn('Could not save SQLite database.', error);
+    if (!sqliteSaveWarned) {
+      sqliteSaveWarned = true;
+      toast('Could not save to SQLite. Your local browser copy is still available.');
+    }
+  });
+  return sqliteSavePromise;
+}
+function queueSqliteSave() {
+  clearTimeout(sqliteSaveTimer);
+  sqliteSaveTimer = setTimeout(() => { sqliteSaveTimer = 0; saveSqliteNow(); }, 350);
+}
+function flushSqliteSave() {
+  clearTimeout(sqliteSaveTimer);
+  sqliteSaveTimer = 0;
+  return saveSqliteNow();
 }
 function persist(key, value) {
   if (key === 'docs') syncDocs();
@@ -316,7 +341,10 @@ function saveState() {
   saveTimer = setTimeout(saveNow, 250);
 }
 // closing the tab within those 250 ms shouldn't lose the last keystrokes
-window.addEventListener('pagehide', () => { if (saveTimer) saveNow(); });
+window.addEventListener('pagehide', () => {
+  if (saveTimer) saveNow();
+  flushSqliteSave();
+});
 
 function parseCurrent() {
   const r = state.mode === 'text' ? parseText(ta.value) : parseSQL(ta.value);

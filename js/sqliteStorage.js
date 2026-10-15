@@ -78,8 +78,15 @@
     if (migrated) writeSqliteSnapshot(db, localSnapshot());
     const snapshot = readSqliteSnapshot(db);
     await writeBytes(idb, db.export());
+    let saveChain = Promise.resolve();
     return { migrated, snapshot, localSnapshot, replaceLocalSnapshot, sameSnapshot,
-      async save(next) { writeSqliteSnapshot(db, next); await writeBytes(idb, db.export()); } };
+      save(next) {
+        saveChain = saveChain.catch(() => {}).then(async () => {
+          writeSqliteSnapshot(db, next);
+          await writeBytes(idb, db.export());
+        });
+        return saveChain;
+      } };
   }
   window.sqliteStorageReady = initialize().catch(error => {
     console.warn('SQLite storage unavailable; using localStorage fallback.', error);
