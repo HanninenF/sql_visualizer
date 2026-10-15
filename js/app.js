@@ -181,6 +181,7 @@ ta.addEventListener('input', () => {
 const SETTINGS = ['colors', 'fontSize', 'wrap', 'notation', 'implicit', 'keysOnly', 'dataView', 'panel', 'leftW'];
 // base: the text the diagram was created with (an example, or empty), to tell whether it has changed
 const DOC_DEFAULTS = { text: '', sql: '', mode: 'text', textStale: false, sqlStale: true, base: null };
+const SQLITE_DIRTY_KEY = 'sqlviz.meta.sqliteDirty';
 const docKey = id => 'doc.' + id;
 const newDocId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 // a new diagram is named after its first comment line ("# School database")
@@ -254,7 +255,7 @@ readDoc(docs.active);
 // SQLite is authoritative once it has been initialized. A first run migrates
 // the existing localStorage snapshot; later runs restore SQLite's snapshot
 // before the app continues using localStorage as its synchronous cache.
-window.sqliteStorageReady?.then(storage => {
+window.sqliteStorageReady?.then(async storage => {
   const restoreFlag = 'sqlviz.sqliteRestorePending';
   if (!storage) {
     setTimeout(() => toast('SQLite could not be loaded. Using localStorage fallback.'), 0);
@@ -262,6 +263,12 @@ window.sqliteStorageReady?.then(storage => {
   }
   if (storage.migrated) {
     sessionStorage.removeItem(restoreFlag);
+    return;
+  }
+  const dirtyToken = localStorage.getItem(SQLITE_DIRTY_KEY);
+  if (dirtyToken) {
+    await storage.save(storage.localSnapshot());
+    if (localStorage.getItem(SQLITE_DIRTY_KEY) === dirtyToken) localStorage.removeItem(SQLITE_DIRTY_KEY);
     return;
   }
   if (storage.sameSnapshot(storage.snapshot, storage.localSnapshot())) {
@@ -292,7 +299,10 @@ function saveSqliteNow() {
   sqliteSavePromise = sqliteSavePromise.then(async () => {
     const storage = await window.sqliteStorageReady;
     if (!storage) return;
+    const dirtyToken = localStorage.getItem(SQLITE_DIRTY_KEY);
     await storage.save(storage.localSnapshot());
+    if (dirtyToken && localStorage.getItem(SQLITE_DIRTY_KEY) === dirtyToken)
+      localStorage.removeItem(SQLITE_DIRTY_KEY);
   }).catch(error => {
     console.warn('Could not save SQLite database.', error);
     if (!sqliteSaveWarned) {
@@ -315,6 +325,7 @@ function persist(key, value) {
   if (key === 'docs') syncDocs();
   if (store.set(key, value)) {
     if (key === 'docs') persistedDocs = structuredClone(docs);
+    try { localStorage.setItem(SQLITE_DIRTY_KEY, `${Date.now()}-${Math.random()}`); } catch { /* SQLite remains best effort */ }
     queueSqliteSave();
     return;
   }
