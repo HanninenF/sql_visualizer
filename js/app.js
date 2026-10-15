@@ -251,12 +251,32 @@ function readDoc(id) {
 }
 readDoc(docs.active);
 
+// SQLite is authoritative once it has been initialized. A first run migrates
+// the existing localStorage snapshot; later runs restore SQLite's snapshot
+// before the app continues using localStorage as its synchronous cache.
+window.sqliteStorageReady?.then(storage => {
+  if (!storage || storage.migrated || storage.sameSnapshot(storage.snapshot, storage.localSnapshot())) return;
+  storage.replaceLocalSnapshot(storage.snapshot);
+  window.location.reload();
+});
+
 // Saving. A failed save (storage full) is reported once instead of losing work silently.
 let storageWarned = false;
+let sqliteSaveTimer = 0;
+function queueSqliteSave() {
+  clearTimeout(sqliteSaveTimer);
+  sqliteSaveTimer = setTimeout(async () => {
+    const storage = await window.sqliteStorageReady;
+    if (!storage) return;
+    try { await storage.save(storage.localSnapshot()); }
+    catch (error) { console.warn('Could not save SQLite database.', error); }
+  }, 350);
+}
 function persist(key, value) {
   if (key === 'docs') syncDocs();
   if (store.set(key, value)) {
     if (key === 'docs') persistedDocs = structuredClone(docs);
+    queueSqliteSave();
     return;
   }
   if (storageWarned) return;
