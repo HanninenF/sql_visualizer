@@ -11,7 +11,9 @@ A browser tool for drawing SQL table diagrams. Arrows connect foreign-key column
 - Export diagrams as SVG or PNG, and schemas as MariaDB SQL.
 - Keep multiple diagrams in tabs, with light and dark themes.
 
-Diagrams are saved in your browser. Export a copy to keep your work outside it.
+Diagrams are stored by the local Node server in `data/sqlviz.sqlite`, so they
+survive clearing browser cookies, history and website data. The server also
+keeps the ten latest database backups in `data/backups/`.
 
 ## Simple syntax
 
@@ -53,7 +55,9 @@ npm start
 ```
 
 Then open `http://127.0.0.1:5500`. The app stores durable data in
-`data/sqlviz.sqlite`. Do not use Live Server for SQLite-backed mode; it only
-serves static files and cannot provide the storage API.
+`data/sqlviz.sqlite` and requires Node.js 22.5 or newer. Do not use Live Server
+for SQLite-backed mode; it only serves static files and cannot provide the
+storage API. Export a copy of the database before moving or deleting the
+project folder.
 
 ![SQL Visualizer in dark mode](docs/screenshots/dark.png)

@@ -1,25 +1,64 @@
 import { createServer } from 'node:http';
-import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+let DatabaseSync;
+try {
+  ({ DatabaseSync } = await import('node:sqlite'));
+} catch {
+  console.error('SQL Visualizer requires Node.js 22.5 or newer because it uses node:sqlite.');
+  process.exit(1);
+}
+
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.join(rootDir, 'data');
+const backupDir = path.join(dataDir, 'backups');
 const dbPath = path.join(dataDir, 'sqlviz.sqlite');
 const port = Number(process.env.PORT || 5500);
 const MAX_BODY = 10 * 1024 * 1024;
 
 fs.mkdirSync(dataDir, { recursive: true });
-const db = new DatabaseSync(dbPath);
-db.exec(`
-  PRAGMA busy_timeout = 10000;
-  PRAGMA journal_mode = WAL;
-  CREATE TABLE IF NOT EXISTS kv (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-  );
-`);
+fs.mkdirSync(backupDir, { recursive: true });
+
+function openDatabase() {
+  const database = new DatabaseSync(dbPath);
+  try {
+    database.exec(`
+      PRAGMA busy_timeout = 10000;
+      PRAGMA journal_mode = WAL;
+      CREATE TABLE IF NOT EXISTS kv (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+    return database;
+  } catch (error) {
+    database.close();
+    throw error;
+  }
+}
+
+function latestBackup() {
+  return fs.readdirSync(backupDir)
+    .filter(name => name.startsWith('sqlviz-') && name.endsWith('.sqlite'))
+    .map(name => {
+      const filePath = path.join(backupDir, name);
+      return { filePath, mtime: fs.statSync(filePath).mtimeMs };
+    })
+    .sort((a, b) => b.mtime - a.mtime)[0]?.filePath;
+}
+
+let db;
+try {
+  db = openDatabase();
+} catch (error) {
+  const backupPath = latestBackup();
+  if (!backupPath) throw error;
+  console.warn(`SQLite database could not be opened. Restoring ${backupPath}.`);
+  fs.copyFileSync(backupPath, dbPath);
+  db = openDatabase();
+}
 
 function readSnapshot() {
   const snapshot = {};
@@ -61,18 +100,49 @@ function writeSnapshot(snapshot) {
   validateSnapshot(snapshot);
   db.exec('BEGIN;');
   try {
-    db.exec('DELETE FROM kv;');
-    const statement = db.prepare('INSERT INTO kv (key, value) VALUES (?, ?)');
+    const existing = readSnapshot();
+    const remove = db.prepare('DELETE FROM kv WHERE key = ?');
+    const upsert = db.prepare(`
+      INSERT INTO kv (key, value) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `);
     try {
-      for (const [key, value] of Object.entries(snapshot)) statement.run(key, value);
+      for (const key of Object.keys(existing)) if (!(key in snapshot)) remove.run(key);
+      for (const [key, value] of Object.entries(snapshot)) {
+        if (existing[key] !== value) upsert.run(key, value);
+      }
     } finally {
-      statement.finalize?.();
+      remove.finalize?.();
+      upsert.finalize?.();
     }
     db.exec('COMMIT;');
+    try {
+      createBackup();
+    } catch (backupError) {
+      console.warn('SQLite data was saved, but the backup could not be updated.', backupError);
+    }
   } catch (error) {
     db.exec('ROLLBACK;');
     throw error;
   }
+}
+
+function createBackup() {
+  const stamp = `${new Date().toISOString().replace(/[:.]/g, '-')}-${process.hrtime.bigint()}`;
+  const backupPath = path.join(backupDir, `sqlviz-${stamp}.sqlite`);
+  const escapedPath = backupPath.replaceAll("'", "''");
+  db.exec(`VACUUM INTO '${escapedPath}'`);
+  const backups = fs.readdirSync(backupDir)
+    .filter(name => name.startsWith('sqlviz-') && name.endsWith('.sqlite'))
+    .sort()
+    .reverse();
+  for (const old of backups.slice(10)) fs.rmSync(path.join(backupDir, old));
+}
+
+try {
+  createBackup();
+} catch (error) {
+  console.warn('SQLite backup could not be created at startup. The database remains available.', error);
 }
 
 function sendJson(response, status, body) {
