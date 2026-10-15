@@ -57,7 +57,7 @@ npm start
 Then open `http://127.0.0.1:5500`. The app stores durable data in
 `data/sqlviz.sqlite` and requires Node.js 22.5 or newer. Do not use Live Server
 for SQLite-backed mode; it only serves static files and cannot provide the
-storage API. Export a copy of the database before moving or deleting the
-project folder.
+storage API. Copy `data/sqlviz.sqlite` and the `data/backups/` folder before
+moving or deleting the project folder.
 
 ![SQL Visualizer in dark mode](docs/screenshots/dark.png)

@@ -32,10 +32,36 @@ function openDatabase() {
         value TEXT NOT NULL
       );
     `);
+    validateDatabase(database);
     return database;
   } catch (error) {
     database.close();
     throw error;
+  }
+}
+
+function validateDatabase(database) {
+  const tables = database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'kv'").all();
+  const columns = database.prepare('PRAGMA table_info(kv)').all();
+  const validSchema = tables.length === 1
+    && columns.length === 2
+    && columns[0].name === 'key'
+    && columns[0].type.toUpperCase() === 'TEXT'
+    && Number(columns[0].pk) === 1
+    && columns[1].name === 'value'
+    && columns[1].type.toUpperCase() === 'TEXT'
+    && Number(columns[1].notnull) === 1;
+  if (!validSchema) throw new Error('SQLite kv table has an invalid schema');
+  const integrity = database.prepare('PRAGMA integrity_check').all();
+  if (integrity[0]?.integrity_check !== 'ok') throw new Error('SQLite integrity check failed');
+}
+
+function validateBackup(backupPath) {
+  const backup = new DatabaseSync(backupPath);
+  try {
+    validateDatabase(backup);
+  } finally {
+    backup.close();
   }
 }
 
@@ -65,6 +91,7 @@ try {
   let restored = null;
   for (const backupPath of candidates) {
     try {
+      validateBackup(backupPath);
       removeJournalFiles();
       fs.copyFileSync(backupPath, dbPath);
       restored = openDatabase();
