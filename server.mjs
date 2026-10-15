@@ -39,25 +39,43 @@ function openDatabase() {
   }
 }
 
-function latestBackup() {
+function removeJournalFiles() {
+  for (const suffix of ['-wal', '-shm']) {
+    try { fs.rmSync(dbPath + suffix); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+}
+
+function backupCandidates() {
   return fs.readdirSync(backupDir)
     .filter(name => name.startsWith('sqlviz-') && name.endsWith('.sqlite'))
     .map(name => {
       const filePath = path.join(backupDir, name);
       return { filePath, mtime: fs.statSync(filePath).mtimeMs };
     })
-    .sort((a, b) => b.mtime - a.mtime)[0]?.filePath;
+    .sort((a, b) => b.mtime - a.mtime)
+    .map(entry => entry.filePath);
 }
 
 let db;
 try {
   db = openDatabase();
 } catch (error) {
-  const backupPath = latestBackup();
-  if (!backupPath) throw error;
-  console.warn(`SQLite database could not be opened. Restoring ${backupPath}.`);
-  fs.copyFileSync(backupPath, dbPath);
-  db = openDatabase();
+  const candidates = backupCandidates();
+  if (!candidates.length) throw error;
+  let restored = null;
+  for (const backupPath of candidates) {
+    try {
+      removeJournalFiles();
+      fs.copyFileSync(backupPath, dbPath);
+      restored = openDatabase();
+      console.warn(`SQLite database was restored from ${backupPath}.`);
+      break;
+    } catch (restoreError) {
+      console.warn(`SQLite backup could not be opened: ${backupPath}.`, restoreError);
+    }
+  }
+  if (!restored) throw error;
+  db = restored;
 }
 
 function readSnapshot() {
@@ -116,11 +134,7 @@ function writeSnapshot(snapshot) {
       upsert.finalize?.();
     }
     db.exec('COMMIT;');
-    try {
-      createBackup();
-    } catch (backupError) {
-      console.warn('SQLite data was saved, but the backup could not be updated.', backupError);
-    }
+    queueBackup();
   } catch (error) {
     db.exec('ROLLBACK;');
     throw error;
@@ -137,6 +151,26 @@ function createBackup() {
     .sort()
     .reverse();
   for (const old of backups.slice(10)) fs.rmSync(path.join(backupDir, old));
+}
+
+let backupTimer = 0;
+let backupPromise = Promise.resolve();
+function queueBackup() {
+  clearTimeout(backupTimer);
+  backupTimer = setTimeout(() => {
+    backupTimer = 0;
+    backupPromise = backupPromise.then(() => createBackup()).catch(error => {
+      console.warn('SQLite data was saved, but the backup could not be updated.', error);
+    });
+  }, 1000);
+}
+function flushBackup() {
+  clearTimeout(backupTimer);
+  backupTimer = 0;
+  backupPromise = backupPromise.then(() => createBackup()).catch(error => {
+    console.warn('SQLite backup could not be finalized.', error);
+  });
+  return backupPromise;
 }
 
 try {
@@ -225,6 +259,6 @@ server.listen(port, '127.0.0.1', () => {
   console.log(`SQLite database: ${dbPath}`);
 });
 
-function close() { server.close(() => db.close()); }
+function close() { flushBackup().finally(() => server.close(() => db.close())); }
 process.once('SIGINT', close);
 process.once('SIGTERM', close);
