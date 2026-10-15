@@ -87,7 +87,16 @@
     return merged;
   }
   function ensureSchema(db) {
-    db.run('CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);');
+    const table = db.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'kv'")[0]?.values ?? [];
+    if (!table.length) {
+      db.run('CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);');
+      return;
+    }
+    const columns = db.exec('PRAGMA table_info(kv)')[0]?.values ?? [];
+    const valid = columns.length === 2
+      && columns[0][1] === 'key' && Number(columns[0][5]) === 1
+      && columns[1][1] === 'value' && Number(columns[1][3]) === 1;
+    if (!valid) throw new Error('SQLite kv table has an invalid schema');
   }
   function readSqliteSnapshot(db) {
     const result = {};
@@ -146,14 +155,24 @@
               ensureSchema(latestDb);
               const latest = readSqliteSnapshot(latestDb);
               const merged = mergeSnapshots(baseSnapshot, next, latest);
+              const conflicts = [...new Set([...Object.keys(baseSnapshot), ...Object.keys(next), ...Object.keys(latest)])].filter(key => {
+                const baseHas = Object.prototype.hasOwnProperty.call(baseSnapshot, key);
+                const nextHas = Object.prototype.hasOwnProperty.call(next, key);
+                const latestHas = Object.prototype.hasOwnProperty.call(latest, key);
+                const changedByUs = baseHas !== nextHas || baseSnapshot[key] !== next[key];
+                const changedByOther = baseHas !== latestHas || baseSnapshot[key] !== latest[key];
+                const versionsDiffer = nextHas !== latestHas || next[key] !== latest[key];
+                return changedByUs && changedByOther && versionsDiffer;
+              });
               writeSqliteSnapshot(latestDb, merged);
-              return { bytes: latestDb.export(), result: merged };
+              return { bytes: latestDb.export(), result: { snapshot: merged, conflicts } };
             } finally {
               latestDb.close?.();
             }
           });
-          baseSnapshot = update;
-          api.snapshot = update;
+          baseSnapshot = update.snapshot;
+          api.snapshot = update.snapshot;
+          return update.conflicts;
         });
         return saveChain;
       } };

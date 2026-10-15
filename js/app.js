@@ -267,7 +267,7 @@ window.sqliteStorageReady?.then(async storage => {
   }
   const dirtyToken = localStorage.getItem(SQLITE_DIRTY_KEY);
   if (dirtyToken) {
-    await storage.save(storage.localSnapshot());
+    reportSqliteConflicts(await storage.save(storage.localSnapshot()));
     if (localStorage.getItem(SQLITE_DIRTY_KEY) === dirtyToken) localStorage.removeItem(SQLITE_DIRTY_KEY);
     return;
   }
@@ -295,12 +295,21 @@ let storageWarned = false;
 let sqliteSaveTimer = 0;
 let sqliteSavePromise = Promise.resolve();
 let sqliteSaveWarned = false;
+let sqliteConflictWarned = false;
+function reportSqliteConflicts(conflicts = []) {
+  if (!conflicts.length) return;
+  console.warn('SQLite concurrent changes used last-writer-wins for:', conflicts);
+  if (sqliteConflictWarned) return;
+  sqliteConflictWarned = true;
+  const names = conflicts.slice(0, 2).map(key => key.replace(/^sqlviz\./, '')).join(', ');
+  toast(`Another tab changed ${names}. The latest change was saved.`);
+}
 function saveSqliteNow() {
   sqliteSavePromise = sqliteSavePromise.then(async () => {
     const storage = await window.sqliteStorageReady;
     if (!storage) return;
     const dirtyToken = localStorage.getItem(SQLITE_DIRTY_KEY);
-    await storage.save(storage.localSnapshot());
+    reportSqliteConflicts(await storage.save(storage.localSnapshot()));
     if (dirtyToken && localStorage.getItem(SQLITE_DIRTY_KEY) === dirtyToken)
       localStorage.removeItem(SQLITE_DIRTY_KEY);
   }).catch(error => {
@@ -353,6 +362,11 @@ function saveState() {
 }
 // closing the tab within those 250 ms shouldn't lose the last keystrokes
 window.addEventListener('pagehide', () => {
+  if (saveTimer) saveNow();
+  flushSqliteSave();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'hidden') return;
   if (saveTimer) saveNow();
   flushSqliteSave();
 });
