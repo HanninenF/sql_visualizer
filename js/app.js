@@ -181,6 +181,7 @@ ta.addEventListener('input', () => {
 const SETTINGS = ['colors', 'fontSize', 'wrap', 'notation', 'implicit', 'keysOnly', 'dataView', 'panel', 'leftW'];
 // base: the text the diagram was created with (an example, or empty), to tell whether it has changed
 const DOC_DEFAULTS = { text: '', sql: '', mode: 'text', textStale: false, sqlStale: true, base: null };
+const SQLITE_DIRTY_KEY = 'sqlviz.meta.sqliteDirty';
 const docKey = id => 'doc.' + id;
 const newDocId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 // a new diagram is named after its first comment line ("# School database")
@@ -251,12 +252,92 @@ function readDoc(id) {
 }
 readDoc(docs.active);
 
-// Saving. A failed save (storage full) is reported once instead of losing work silently.
+// SQLite is authoritative once it has been initialized. A first run migrates
+// the existing localStorage snapshot; later runs restore SQLite's snapshot
+// before the app continues using localStorage as its synchronous cache.
+window.sqliteStorageReady?.then(async storage => {
+  const restoreFlag = 'sqlviz.sqliteRestorePending';
+  if (!storage) {
+    setTimeout(() => toast('Disk storage is unavailable. Start the app with "npm start"; localStorage fallback is active.'), 0);
+    return;
+  }
+  if (storage.migrated) {
+    const dirtyToken = localStorage.getItem(SQLITE_DIRTY_KEY);
+    reportSqliteConflicts(await storage.save(storage.localSnapshot()));
+    if (dirtyToken && localStorage.getItem(SQLITE_DIRTY_KEY) === dirtyToken)
+      localStorage.removeItem(SQLITE_DIRTY_KEY);
+    sessionStorage.removeItem(restoreFlag);
+    return;
+  }
+  // An existing SQLite snapshot is authoritative. A stale dirty flag can be
+  // left behind by an older browser cache and must not overwrite the durable
+  // database during startup. New edits are persisted through persist()/save().
+  localStorage.removeItem(SQLITE_DIRTY_KEY);
+  if (storage.sameSnapshot(storage.snapshot, storage.localSnapshot())) {
+    sessionStorage.removeItem(restoreFlag);
+    return;
+  }
+  if (sessionStorage.getItem(restoreFlag) === '1') {
+    sessionStorage.removeItem(restoreFlag);
+    toast('SQLite restore needs attention. The current browser cache was kept.');
+    console.warn('SQLite and localStorage still differ after one restore; reload stopped.');
+    return;
+  }
+  sessionStorage.setItem(restoreFlag, '1');
+  storage.replaceLocalSnapshot(storage.snapshot);
+  window.location.reload();
+}).catch(error => {
+  sessionStorage.removeItem('sqlviz.sqliteRestorePending');
+  console.warn('SQLite restore failed; keeping the current browser cache.', error);
+  setTimeout(() => toast('SQLite restore failed. The current browser cache was kept.'), 0);
+});
+
+// Saving. A failed save is reported once instead of losing work silently.
 let storageWarned = false;
+let sqliteSaveTimer = 0;
+let sqliteSavePromise = Promise.resolve();
+let sqliteSaveWarned = false;
+let sqliteConflictWarned = false;
+function reportSqliteConflicts(conflicts = []) {
+  if (!conflicts.length) return;
+  console.warn('SQLite concurrent changes used last-writer-wins for:', conflicts);
+  if (sqliteConflictWarned) return;
+  sqliteConflictWarned = true;
+  const names = conflicts.slice(0, 2).map(key => key.replace(/^sqlviz\./, '')).join(', ');
+  toast(`Another tab changed ${names}. The latest change was saved.`);
+}
+function saveSqliteNow() {
+  sqliteSavePromise = sqliteSavePromise.then(async () => {
+    const storage = await window.sqliteStorageReady;
+    if (!storage) return;
+    const dirtyToken = localStorage.getItem(SQLITE_DIRTY_KEY);
+    reportSqliteConflicts(await storage.save(storage.localSnapshot()));
+    if (dirtyToken && localStorage.getItem(SQLITE_DIRTY_KEY) === dirtyToken)
+      localStorage.removeItem(SQLITE_DIRTY_KEY);
+  }).catch(error => {
+    console.warn('Could not save SQLite database.', error);
+    if (!sqliteSaveWarned) {
+      sqliteSaveWarned = true;
+      toast('Could not save to SQLite. Your local browser copy is still available.');
+    }
+  });
+  return sqliteSavePromise;
+}
+function queueSqliteSave() {
+  clearTimeout(sqliteSaveTimer);
+  sqliteSaveTimer = setTimeout(() => { sqliteSaveTimer = 0; saveSqliteNow(); }, 350);
+}
+function flushSqliteSave() {
+  clearTimeout(sqliteSaveTimer);
+  sqliteSaveTimer = 0;
+  return saveSqliteNow();
+}
 function persist(key, value) {
   if (key === 'docs') syncDocs();
   if (store.set(key, value)) {
     if (key === 'docs') persistedDocs = structuredClone(docs);
+    try { localStorage.setItem(SQLITE_DIRTY_KEY, `${Date.now()}-${Math.random()}`); } catch { /* SQLite remains best effort */ }
+    queueSqliteSave();
     return;
   }
   if (storageWarned) return;
@@ -282,7 +363,15 @@ function saveState() {
   saveTimer = setTimeout(saveNow, 250);
 }
 // closing the tab within those 250 ms shouldn't lose the last keystrokes
-window.addEventListener('pagehide', () => { if (saveTimer) saveNow(); });
+window.addEventListener('pagehide', () => {
+  if (saveTimer) saveNow();
+  flushSqliteSave();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'hidden') return;
+  if (saveTimer) saveNow();
+  flushSqliteSave();
+});
 
 function parseCurrent() {
   const r = state.mode === 'text' ? parseText(ta.value) : parseSQL(ta.value);
