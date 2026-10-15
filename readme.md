@@ -46,6 +46,14 @@ The **Data** view displays these rows. Tables without an `@data` block are shown
 
 ## Run locally
 
-Open `index.html` in your browser. No installation or build step needed.
+Start the app with Node.js 22.5 or newer:
+
+```powershell
+npm start
+```
+
+Then open `http://127.0.0.1:5500`. The app stores durable data in
+`data/sqlviz.sqlite`. Do not use Live Server for SQLite-backed mode; it only
+serves static files and cannot provide the storage API.
 
 ![SQL Visualizer in dark mode](docs/screenshots/dark.png)

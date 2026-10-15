@@ -262,6 +262,10 @@ window.sqliteStorageReady?.then(async storage => {
     return;
   }
   if (storage.migrated) {
+    const dirtyToken = localStorage.getItem(SQLITE_DIRTY_KEY);
+    reportSqliteConflicts(await storage.save(storage.localSnapshot()));
+    if (dirtyToken && localStorage.getItem(SQLITE_DIRTY_KEY) === dirtyToken)
+      localStorage.removeItem(SQLITE_DIRTY_KEY);
     sessionStorage.removeItem(restoreFlag);
     return;
   }
