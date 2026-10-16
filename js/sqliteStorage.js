@@ -4,6 +4,9 @@
 // browser cache so the existing app can render before the first API response.
 (function () {
   const DIRTY_KEY = 'sqlviz.meta.sqliteDirty';
+  const debug = (...args) => {
+    try { if (localStorage.getItem('sqlviz.debugPersistence') === '1') console.debug('[sqlviz persistence]', ...args); } catch { /* ignore */ }
+  };
 
   function localSnapshot() {
     const snapshot = {};
@@ -36,9 +39,16 @@
   }
 
   async function request(path, options) {
-    const response = await fetch(path, { cache: 'no-store', ...options });
+    const requestOptions = { cache: 'no-store', ...options };
+    // A final save can be started from pagehide/visibilitychange. keepalive
+    // lets the browser finish that small SQLite snapshot while a reload is
+    // already in progress instead of restoring the previous layout.
+    if (options?.method === 'PUT') requestOptions.keepalive = true;
+    debug('request:start', path, requestOptions.method || 'GET', requestOptions.keepalive ? 'keepalive' : 'normal');
+    const response = await fetch(path, requestOptions);
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || `Storage request failed (${response.status})`);
+    debug('request:done', path, response.status, body.conflicts?.length ? { conflicts: body.conflicts } : 'ok');
     return body;
   }
 
@@ -53,6 +63,7 @@
       throw error;
     }
     let baseSnapshot = loaded.snapshot || {};
+    debug('initialize:loaded', { hasData: loaded.hasData, keys: Object.keys(baseSnapshot).length });
     let saveChain = Promise.resolve();
     const api = {
       migrated: !loaded.hasData,
@@ -62,6 +73,7 @@
       replaceLocalSnapshot,
       sameSnapshot,
       save(next) {
+        debug('save:queued', { baseKeys: Object.keys(baseSnapshot).length, nextKeys: Object.keys(next).length });
         saveChain = saveChain.catch(() => {}).then(async () => {
           const result = await request('/api/storage/merge', {
             method: 'PUT',
@@ -70,6 +82,7 @@
           });
           baseSnapshot = result.snapshot;
           api.snapshot = result.snapshot;
+          debug('save:complete', { keys: Object.keys(result.snapshot || {}).length });
           return result.conflicts || [];
         });
         return saveChain;

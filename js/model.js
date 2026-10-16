@@ -52,7 +52,10 @@ function splitDataValues(text) {
     if (escaped) { escaped = false; continue; }
     if (ch === '\\' && quote) { escaped = true; continue; }
     if (quote) { if (ch === quote) quote = null; continue; }
-    if (ch === '"' || ch === "'") { quote = ch; continue; }
+    // A quote starts a quoted value only at the beginning of a field. This
+    // keeps apostrophes in ordinary text such as "They'll" from swallowing
+    // the commas that follow the value.
+    if ((ch === '"' || ch === "'") && !text.slice(start, i).trim()) { quote = ch; continue; }
     if (ch === separator) { values.push(text.slice(start, i).trim()); start = i + 1; }
   }
   values.push(text.slice(start).trim());
@@ -61,15 +64,60 @@ function splitDataValues(text) {
 
 function parseText(src) {
   const tables = [], problems = [];
+  const dataLines = new Set(), dataRowLines = new Set();
   let cur = null;
   let dataIndent = -1;
+  let pendingData = null;
+  const parseDataValues = text => splitDataValues(text).map(v => {
+    const value = v.trim();
+    if (/^null$/i.test(value)) return null;
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      return value.slice(1, -1).replace(/\\([\\"'])/g, '$1');
+    }
+    return value;
+  });
+  const flushPendingData = () => {
+    if (!pendingData || !cur) return;
+    if (pendingData.values.length !== cur.cols.length) {
+      problems.push(problem(pendingData.line, `${cur.name} data row has ${pendingData.values.length} values, but the table has ${cur.cols.length} columns`));
+    } else {
+      cur.dataRows.push(pendingData);
+    }
+    pendingData = null;
+  };
   src.split('\n').forEach((raw, i) => {
     const line = i + 1;
     const code = raw.replace(/#.*$/, '');
-    if (!code.trim()) return;
+    const commentOnly = /^\s*#/.test(raw);
+    if (!code.trim()) {
+      if (!commentOnly && dataIndent >= 0) {
+        flushPendingData();
+        dataIndent = -1;
+      }
+      return;
+    }
     const indent = raw.match(/^\s*/)[0].length;
 
+    // Clipboard wrapping can remove the indentation from a continuation line.
+    // If the current data row is incomplete, try to complete it before treating
+    // an otherwise unindented line as a new table.
+    if (pendingData && dataIndent >= 0) {
+      const unindentedContinuation = code.includes(',') || /^\d{1,3}:\d{2}(?::\d{2})?$/.test(code.trim());
+      if (indent > dataIndent || unindentedContinuation) {
+        dataLines.add(line);
+        const combinedText = `${pendingData.text} ${code.trim()}`;
+        const combined = parseDataValues(combinedText);
+        if (combined.length <= cur.cols.length) {
+          pendingData.text = combinedText;
+          pendingData.values = combined;
+          if (combined.length === cur.cols.length && combined.at(-1) !== '') flushPendingData();
+          return;
+        }
+      }
+    }
+
     if (!/^\s/.test(code)) {
+      flushPendingData();
       const name = code.trim().replace(/:$/, '');
       if (!IDENT.test(name)) {
         problems.push(problem(line, `"${name}" is not a valid table name`));
@@ -93,6 +141,7 @@ function parseText(src) {
     }
 
     if (cur.dataRows && /^\s*@data\s*$/i.test(code)) {
+      flushPendingData();
       dataIndent = indent;
       return;
     }
@@ -100,22 +149,27 @@ function parseText(src) {
     // Data rows are comma-separated and indented one level below @data.
     // Values are kept as strings here; sample.js applies SQL type semantics later.
     if (dataIndent >= 0 && indent > dataIndent) {
-      const values = splitDataValues(code.trim()).map(v => {
-        const value = v.trim();
-        if (/^null$/i.test(value)) return null;
-        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-          return value.slice(1, -1).replace(/\\([\\"'])/g, '$1');
-        }
-        return value;
-      });
+      dataLines.add(line);
+      const text = code.trim();
+      const values = parseDataValues(text);
       if (!values.length || values.every(v => v === '')) return;
-      if (values.length !== cur.cols.length) {
-        problems.push(problem(line, `${cur.name} data row has ${values.length} values, but the table has ${cur.cols.length} columns`));
-      } else {
-        cur.dataRows.push({ values, line });
+      if (pendingData) {
+        const combinedText = `${pendingData.text} ${text}`;
+        const combined = parseDataValues(combinedText);
+        if (combined.length <= cur.cols.length) {
+          pendingData.text = combinedText;
+          pendingData.values = combined;
+          if (combined.length === cur.cols.length && combined.at(-1) !== '') flushPendingData();
+          return;
+        }
+        flushPendingData();
       }
+      pendingData = { text, values, line };
+      dataRowLines.add(line);
+      if (values.length === cur.cols.length && values.at(-1) !== '') flushPendingData();
       return;
     }
+    flushPendingData();
     dataIndent = -1;
 
     if (/^\s+index\b\s*(?:[\p{L}_][\p{L}\p{N}_$]*\s*)?\(/iu.test(code)) {
@@ -164,7 +218,8 @@ function parseText(src) {
     col.type = typeParts.join(' ') || null;
     cur.cols.push(col);
   });
-  return { tables, problems };
+  flushPendingData();
+  return { tables, problems, dataLines, dataRowLines };
 }
 
 // ─── Resolve: primary keys, arrows, default types ────────────────────────────

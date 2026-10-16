@@ -42,6 +42,15 @@ function rowInfo(c) {
 // The rows a box shows: every column, or with "Keys only" just the primary keys, the
 // foreign keys and the columns they point to
 const shownCols = t => t.shown ?? t.cols;
+let sampleDataWarningShown = false;
+function getSampleData(tables) {
+  if (typeof sampleData === 'function') return sampleData(tables);
+  if (!sampleDataWarningShown) {
+    sampleDataWarningShown = true;
+    console.warn('Sample data helper could not be loaded; showing empty data rows.');
+  }
+  return new Map(tables.map(t => [t, []]));
+}
 function markShown(tables) {
   const targeted = new Set(tables.flatMap(t => t.cols.map(c => c.targetCol).filter(Boolean)));
   for (const t of tables) t.shown = state.keysOnly ? t.cols.filter(c => c.isPk || c.ref || c.target || targeted.has(c)) : t.cols;
@@ -65,7 +74,7 @@ const cellText = v => v == null ? 'NULL' : v.length > CELL_MAX ? v.slice(0, CELL
 const hueCache = new WeakMap();
 function rowHues(tables) {
   if (hueCache.has(tables)) return hueCache.get(tables);
-  const data = sampleData(tables), hues = new Map();
+  const data = getSampleData(tables), hues = new Map();
   const targeted = new Set(tables.flatMap(t => t.cols.map(c => c.target).filter(Boolean)));
   let i = 0;
   for (const t of tables) {
@@ -78,7 +87,7 @@ function rowHues(tables) {
 // cell: { text, key, hue }. key names the row a coloured cell belongs to ("Owner#2"),
 // so hovering one lights up every cell with the same key.
 function measureData(t) {
-  const data = sampleData(model.tables), cols = shownCols(t), rows = data.get(t) ?? [];
+  const data = getSampleData(model.tables), cols = shownCols(t), rows = data.get(t) ?? [];
   const targeted = new Set(model.tables.flatMap(o => o.cols.map(c => c.targetCol).filter(Boolean)));
   const hues = rowHues(model.tables);
   const cells = rows.map((r, k) => cols.map(c => {
@@ -123,6 +132,13 @@ function onScreen(p, d) {
 
 function ensurePositions(tables, dims) {
   const names = new Set(tables.map(t => t.name));
+  // Data positions are an explicit snapshot, not solver input. They are kept
+  // as clean coordinates, so schema-layout metadata (float/sig) must never
+  // cause the solver to reinterpret or move them during reload.
+  if (state.dataView && Object.keys(pos).length && tables.every(t => pos[t.name])) {
+    prevNames = [...names];
+    return false;
+  }
   let changed = false;
   // A table that just appeared may have an old spot from an earlier table with the same
   // name. If that spot is off screen, forget it, so the table is placed where you look.
@@ -131,10 +147,25 @@ function ensurePositions(tables, dims) {
     const before = new Set(prevNames);
     for (const t of tables) if (!before.has(t.name) && pos[t.name] && !onScreen(pos[t.name], dims.get(t))) delete pos[t.name];
   }
-  if (tables.length && !tables.some(t => pos[t.name])) {
-    arrangeAll(tables, dims);
-    revealName = tables[0].name; // placed mid-view, but make sure it shows
-    changed = true;
+  const missing = tables.filter(t => !pos[t.name]);
+  if (missing.length) {
+    if (!Object.keys(pos).length) {
+      arrangeAll(tables, dims);
+      revealName = tables[0].name; // placed mid-view, but make sure it shows
+      changed = true;
+    } else {
+      // A saved layout may belong to an older version of the schema. Place
+      // only newly missing tables; never re-layout the cards the user moved.
+      const edges = layoutEdges(tables);
+      for (const t of missing) {
+        const placed = new Map(tables.filter(o => o !== t && pos[o.name])
+          .map(o => [o, { ...pos[o.name], ...dims.get(o) }]));
+        const s = bestSpot(t, placed, dims, edges, viewCenter());
+        pos[t.name] = { x: s.x, y: s.y, float: true, sig: linkSignature(t, tables) };
+        revealName = t.name;
+      }
+      changed = true;
+    }
   } else {
     // a renamed table keeps the spot of the name it replaced
     tables.forEach((t, i) => {
@@ -154,7 +185,7 @@ function ensurePositions(tables, dims) {
     }
   }
   prevNames = [...names];
-  if (changed) saveDoc();
+  return changed;
 }
 
 // Arrows leave the FK row horizontally and enter the Id row horizontally.
@@ -480,12 +511,13 @@ const svg = $('#canvas'), vp = $('#vp');
 $('#diagramCss').textContent = DIAGRAM_CSS;
 
 let geometry = { boxes: new Map(), edges: [] };
+let positionsChangedDuringGeometry = false;
 
 function computeGeometry() {
   const tables = model.tables;
   markShown(tables);
   const dims = new Map(tables.map(t => [t, measureTable(t)]));
-  ensurePositions(tables, dims);
+  positionsChangedDuringGeometry = ensurePositions(tables, dims);
   const boxes = new Map(tables.map(t => {
     const d = dims.get(t);
     return [t, { x: pos[t.name].x, y: pos[t.name].y, w: d.w, h: d.h, rows: d.rows, data: d.data }];
@@ -741,6 +773,10 @@ function drawDiagram() {
   if (hoverTable) highlightTable(hoverTable);
   showSelectHint();
   if (revealName) { reveal(revealName); revealName = null; }
+  if (positionsChangedDuringGeometry) {
+    positionsChangedDuringGeometry = false;
+    saveDoc();
+  }
 }
 
 // Hovering a table highlights its arrows (drawn on top); hovering an arrow highlights it
@@ -913,7 +949,12 @@ svg.addEventListener('pointermove', e => {
 function endDrag() {
   if (!drag) return;
   if (drag.kind === 'box') {
-    if (drag.moved) { saveDoc(); histCommit(); }
+    if (drag.moved) {
+      if (state.dataView) dataLayoutUserEdited = true;
+      saveDoc(); histCommit();
+      if (state.dataView) writeImmutableLayout?.();
+      else clearImmutableLayout?.();
+    }
     else {
       if (drag.line) selectLine(+drag.line);
       else {
@@ -948,10 +989,62 @@ $('#fitBtn').onclick = () => fit(presentView ? 2 : undefined);
 // Rearrange every table (the Auto layout button, loading an example, repairing overlaps)
 function autoLayout() {
   histRecord('layout', () => arrangeAll(model.tables, geometry.dims));
+  if (state.dataView) dataLayoutUserEdited = true;
   saveDoc();
   drawDiagram();
+  if (state.dataView) writeImmutableLayout?.();
 }
 $('#layoutBtn').onclick = () => { autoLayout(); fit(); };
+
+function updateLayoutButtons() {
+  const button = $('#restoreLayoutBtn');
+  if (button) button.disabled = !Object.keys(savedPos).length;
+}
+async function saveLayoutSnapshot() {
+  const source = state.dataView ? schemaPos : pos;
+  savedPos = positionSnapshot(source);
+  if (!state.dataView) dataPos = null;
+  saveDoc();
+  updateLayoutButtons();
+  // A layout snapshot is an explicit user action: wait for the SQLite queue so
+  // a reload cannot restore the previous snapshot before this one reaches disk.
+  await flushSqliteSave?.();
+  writeImmutableLayout?.();
+  toast('Layout saved.');
+}
+async function restoreLayoutSnapshot() {
+  const current = new Set(model.tables.map(t => t.name));
+  const available = Object.entries(savedPos).filter(([name]) => current.has(name));
+  if (!available.length) {
+    toast('No saved layout is available for this diagram.');
+    return;
+  }
+  histRecord('restore layout', () => {
+    for (const [name, p] of available) schemaPos[name] = { ...p };
+    if (state.dataView) {
+      pos = structuredClone(schemaPos);
+      drawDiagram();
+      arrangeAll(model.tables, geometry.dims);
+      dataLayoutUserEdited = true;
+      dataPos = positionSnapshot(pos);
+    } else {
+      for (const [name, p] of available) pos[name] = { ...p };
+      schemaPos = positionSnapshot(pos);
+      // The data layout is derived from the schema snapshot. It must be
+      // regenerated after restoring the schema, not reused from before it.
+      dataPos = null;
+      dataLayoutUserEdited = false;
+      clearImmutableLayout?.();
+    }
+    drawDiagram();
+    saveDoc();
+  });
+  fit();
+  await flushSqliteSave?.();
+  writeImmutableLayout?.();
+}
+$('#saveLayoutBtn').onclick = saveLayoutSnapshot;
+$('#restoreLayoutBtn').onclick = restoreLayoutSnapshot;
 
 // Do any two boxes overlap? (e.g. positions saved while boxes had other sizes)
 function boxesOverlap() {

@@ -20,6 +20,16 @@ function renderTabs() {
   if (document.activeElement !== nameInput) nameInput.value = activeDoc().name;
   $('#tabs .tab.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   updateTabScroll();
+  renderSavedDocs();
+}
+
+function renderSavedDocs() {
+  const menu = $('#savedMenu'), button = $('#savedBtn');
+  const closed = docs.closed ?? [];
+  button.disabled = !closed.length;
+  menu.innerHTML = closed.length
+    ? closed.map(d => `<button type="button" role="menuitem" data-open-saved="${esc(d.id)}" title="Open ${esc(d.name)}">${esc(d.name)}</button>`).join('')
+    : '<div class="empty">No saved diagrams</div>';
 }
 
 // ‹ › at the ends of the tab bar, only when the tabs don't fit
@@ -65,7 +75,15 @@ function showDoc(id) {
   prevNames = null;
   setHelp(false);
   loadEditor();
-  if (docView) { Object.assign(view, docView); applyView(); } else fit();
+  sanitizePositionsForModel();
+  applySavedLayoutDefault();
+  applyDataLayoutDefault();
+  const restored = restoreViewSnapshot(state.dataView ? dataViewState : schemaViewState);
+  if (!restored) {
+    fit();
+    if (state.dataView) dataViewState = viewSnapshot();
+    else schemaViewState = viewSnapshot();
+  }
   renderTabs();
   updateHistButtons();
 }
@@ -85,7 +103,7 @@ function replaceDoc(id, name, data) {
 // A name not used by another tab: "Untitled", "Untitled 2", …
 // A taken "Untitled 2" continues the series ("Untitled 3") rather than becoming "Untitled 2 2".
 function uniqueName(base) {
-  const used = new Set(docs.list.map(d => d.name));
+  const used = new Set([...docs.list, ...(docs.closed ?? [])].map(d => d.name));
   if (!used.has(base)) return base;
   base = base.replace(/ \d{1,3}$/, ''); // short numbers only, so "Sales 2024" stays itself
   let n = 2;
@@ -109,8 +127,7 @@ function hasWork(id) {
   return d.textStale || (!!d.text?.trim() && d.text !== d.base);
 }
 
-// Close a tab. A diagram with work in it asks first (it only exists in this browser).
-// The diagram is deleted from storage, but the toast can bring it back.
+// Close a tab. The document remains in durable storage and can be reopened later.
 async function closeDoc(id) {
   const i = docs.list.findIndex(d => d.id === id);
   if (i < 0) return;
@@ -119,29 +136,40 @@ async function closeDoc(id) {
     const name = docs.list[i].name;
     const ok = await confirmBox({
       title: `Close “${name}”?`,
-      body: 'Closing deletes this diagram. It is only saved in this browser, not on your disk, ' +
-        'so there is no other copy. To keep it, use <b>Export</b> first.',
-      ok: 'Close and delete',
+      body: 'The diagram will be closed but saved on disk. You can reopen it later.',
+      ok: 'Close diagram',
       cancel: 'Keep it open',
     });
     if (!ok) return;
   }
   const entry = docs.list[i], history = docHistory.get(id);
-  const data = id === docs.active ? docData() : store.get(docKey(id), null); // not storage: its save may have failed
-  if (docs.list.length === 1) { docs.list.splice(i, 1); newDoc('Untitled', ''); } // never zero tabs (and "Untitled" is free)
-  else {
-    if (id === docs.active) switchDoc(docs.list[i + 1]?.id ?? docs.list[i - 1].id);
+  const wasActive = id === docs.active;
+  let placeholderId = null;
+  if (docs.list.length === 1) {
+    placeholderId = newDocId();
+    persist(docKey(placeholderId), { ...DOC_DEFAULTS, text: '', base: '', pos: {} });
+    docs.list = [{ id: placeholderId, name: uniqueName('Untitled') }];
+    docs.active = placeholderId;
+    showDoc(placeholderId);
+  } else {
+    if (wasActive) switchDoc(docs.list[i + 1]?.id ?? docs.list[i - 1].id);
     docs.list.splice(i, 1);
   }
   docHistory.delete(id);
-  store.remove(docKey(id));
+  docs.closed = [...(docs.closed ?? []), { id, name: entry.name }];
   persist('docs', docs);
   renderTabs();
   toast(`Closed “${entry.name}”`, 'Undo', () => {
-    if (data) persist(docKey(id), data);
     if (history) docHistory.set(id, history);
+    docs.closed = (docs.closed ?? []).filter(d => d.id !== id);
+    if (placeholderId) {
+      store.remove(docKey(placeholderId));
+      docs.list = [];
+    }
     docs.list.splice(Math.min(i, docs.list.length), 0, entry);
-    switchDoc(id);
+    if (docs.active !== id) { docs.active = id; showDoc(id); }
+    else showDoc(id);
+    persist('docs', docs);
     renderTabs();
   });
 }
@@ -210,6 +238,24 @@ async function openFile(file) {
   newDoc(name, src, docFields(src, /\.sql$/i.test(file.name) || /\bcreate\s+table\b/i.test(src)));
 }
 $('#openBtn').onclick = () => $('#openFile').click();
+$('#savedBtn').onclick = e => {
+  e.stopPropagation();
+  $('#savedMenu').hidden = !$('#savedMenu').hidden;
+};
+$('#savedMenu').addEventListener('click', e => {
+  const button = e.target.closest('[data-open-saved]');
+  if (!button) return;
+  const id = button.dataset.openSaved, entry = (docs.closed ?? []).find(d => d.id === id);
+  if (!entry || docs.list.some(d => d.id === id)) return;
+  docs.closed = docs.closed.filter(d => d.id !== id);
+  docs.list.push({ id, name: uniqueName(entry.name) });
+  persist('docs', docs);
+  $('#savedMenu').hidden = true;
+  switchDoc(id);
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.saved-wrap')) $('#savedMenu').hidden = true;
+});
 $('#openFile').onchange = e => { openFile(e.target.files[0]); e.target.value = ''; };
 document.addEventListener('dragover', e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); });
 document.addEventListener('drop', e => {

@@ -1,2 +1,3 @@
 deploy_to_web.sh
 data/
+node_modules/
