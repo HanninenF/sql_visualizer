@@ -250,9 +250,6 @@ const DATA_LAYOUT_VERSION = 13;
 // base: the text the diagram was created with (an example, or empty), to tell whether it has changed
 const DOC_DEFAULTS = { text: '', sql: '', mode: 'text', textStale: false, sqlStale: true, base: null };
 const SQLITE_DIRTY_KEY = 'sqlviz.meta.sqliteDirty';
-const persistenceDebug = (...args) => {
-  try { if (localStorage.getItem('sqlviz.debugPersistence') === '1') console.debug('[sqlviz persistence]', ...args); } catch { /* ignore */ }
-};
 const docKey = id => 'doc.' + id;
 const newDocId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 // a new diagram is named after its first comment line ("# School database")
@@ -408,7 +405,6 @@ function readDoc(id) {
     if (Object.keys(cached).length) {
       dataPos = cached;
       dataLayoutSchemaFingerprint = immutable.fingerprint;
-      persistenceDebug('readDoc:immutable-layout', { id, positions: Object.keys(cached).length });
     }
   }
   // Data view has its own saved positions. Keep those across reloads instead
@@ -418,10 +414,6 @@ function readDoc(id) {
   docView = d.view ?? null;
   schemaViewState = d.schemaViewport ?? (!state.dataView ? docView : null);
   dataViewState = d.dataViewport ?? (state.dataView ? docView : null);
-  persistenceDebug('readDoc', { id, dataView: state.dataView, dataLayoutVersion: d.dataLayoutVersion,
-    schemaPositions: Object.keys(schemaPos).length, dataPositions: Object.keys(dataPos || {}).length,
-    savedPositions: Object.keys(savedPos).length,
-    sample: { Record: dataPos?.Record, Edition: dataPos?.Edition, Song: dataPos?.Song } });
 }
 readDoc(docs.active);
 
@@ -502,13 +494,11 @@ function migrateStoredLayoutSnapshot(snapshot) {
 window.sqliteStorageReady?.then(async storage => {
   const restoreFlag = 'sqlviz.sqliteRestorePending';
   if (!storage) {
-    persistenceDebug('startup:no-sqlite');
     sqliteReadyForWrites = true;
     setTimeout(() => toast('Disk storage is unavailable. Start the app with "npm start"; localStorage fallback is active.'), 0);
     return;
   }
   if (storage.migrated) {
-    persistenceDebug('startup:migrate-local-to-sqlite');
     const dirtyToken = localStorage.getItem(SQLITE_DIRTY_KEY);
     reportSqliteConflicts(await storage.save(storage.localSnapshot()));
     if (dirtyToken && localStorage.getItem(SQLITE_DIRTY_KEY) === dirtyToken)
@@ -519,7 +509,6 @@ window.sqliteStorageReady?.then(async storage => {
   }
   const storedLayoutMigration = migrateStoredLayoutSnapshot(storage.snapshot);
   if (storedLayoutMigration.changed) {
-    persistenceDebug('startup:migrate-sqlite-layout', { version: DATA_LAYOUT_VERSION });
     reportSqliteConflicts(await storage.save(storedLayoutMigration.snapshot));
   }
   // A new origin (for example after moving from Live Server to another port)
@@ -531,10 +520,6 @@ window.sqliteStorageReady?.then(async storage => {
   try { localDocs = JSON.parse(localSnapshot['sqlviz.docs'] ?? 'null'); } catch { /* ignore */ }
   try { sqliteDocs = JSON.parse(storage.snapshot['sqlviz.docs'] ?? 'null'); } catch { /* ignore */ }
   if (sqliteDocs?.list?.length && !localDocs?.list?.length) {
-    persistenceDebug('startup:restore-empty-origin', {
-      sqliteDocuments: sqliteDocs.list.length,
-      localDocuments: localDocs?.list?.length ?? 0,
-    });
     sessionStorage.removeItem(restoreFlag);
     storage.replaceLocalSnapshot(storage.snapshot);
     window.location.reload();
@@ -548,7 +533,6 @@ window.sqliteStorageReady?.then(async storage => {
   } catch { /* normal recovery below */ }
   if (localDocs?.list?.length && localHasCurrentDocument) {
     if (!storage.sameSnapshot(storage.snapshot, localSnapshot)) {
-      persistenceDebug('startup:existing-local-wins');
       reportSqliteConflicts(await storage.save(localSnapshot));
     }
     sessionStorage.removeItem(restoreFlag);
@@ -567,7 +551,6 @@ window.sqliteStorageReady?.then(async storage => {
     if (localDoc?.dataLayoutVersion === DATA_LAYOUT_VERSION && localDoc.dataPos &&
         storedDoc?.dataLayoutVersion === DATA_LAYOUT_VERSION &&
         JSON.stringify(localDoc.dataPos) !== JSON.stringify(storedDoc.dataPos)) {
-      persistenceDebug('startup:local-layout-wins');
       reportSqliteConflicts(await storage.save(localSnapshot));
       sessionStorage.removeItem(restoreFlag);
       enableSqliteWrites();
@@ -579,7 +562,6 @@ window.sqliteStorageReady?.then(async storage => {
   // can replace a freshly moved table with the previous durable layout.
   const dirtyToken = localStorage.getItem(SQLITE_DIRTY_KEY);
   if (dirtyToken) {
-    persistenceDebug('startup:dirty-local-wins', { token: dirtyToken });
     reportSqliteConflicts(await storage.save(storage.localSnapshot()));
     if (localStorage.getItem(SQLITE_DIRTY_KEY) === dirtyToken)
       localStorage.removeItem(SQLITE_DIRTY_KEY);
@@ -590,13 +572,11 @@ window.sqliteStorageReady?.then(async storage => {
   // With no unsynced local edit, SQLite is authoritative and can restore the
   // browser cache when the two snapshots differ.
   if (storage.sameSnapshot(storage.snapshot, storage.localSnapshot())) {
-    persistenceDebug('startup:snapshots-identical');
     sessionStorage.removeItem(restoreFlag);
     enableSqliteWrites();
     return;
   }
   if (sessionStorage.getItem(restoreFlag) === '1') {
-    persistenceDebug('startup:restore-aborted-after-retry');
     sessionStorage.removeItem(restoreFlag);
     toast('SQLite restore needs attention. The current browser cache was kept.');
     console.warn('SQLite and localStorage still differ after one restore; reload stopped.');
@@ -604,7 +584,6 @@ window.sqliteStorageReady?.then(async storage => {
     return;
   }
   sessionStorage.setItem(restoreFlag, '1');
-  persistenceDebug('startup:restore-sqlite-to-local');
   storage.replaceLocalSnapshot(storage.snapshot);
   window.location.reload();
 }).catch(error => {
@@ -668,11 +647,9 @@ function persist(key, value) {
     if (key === 'docs') persistedDocs = structuredClone(docs);
     if (!sqliteReadyForWrites) {
       sqliteWritePending = true;
-      persistenceDebug('sqlite:write-deferred', { key });
       return;
     }
     try { localStorage.setItem(SQLITE_DIRTY_KEY, `${Date.now()}-${Math.random()}`); } catch { /* SQLite remains best effort */ }
-    persistenceDebug('local:persist', { key, dirty: !!localStorage.getItem(SQLITE_DIRTY_KEY) });
     queueSqliteSave();
     return;
   }
@@ -698,10 +675,6 @@ function docData(id = docs.active) {
 function saveDoc() {
   if (state.dataView) dataPos = positionSnapshot(pos);
   else schemaPos = positionSnapshot(pos);
-  persistenceDebug('saveDoc', { dataView: state.dataView, dataLayoutVersion: DATA_LAYOUT_VERSION,
-    schemaPositions: Object.keys(schemaPos).length, dataPositions: Object.keys(dataPos || {}).length,
-    active: docs.active,
-    sample: { Record: dataPos?.Record, Edition: dataPos?.Edition, Song: dataPos?.Song } });
   persist(docKey(docs.active), docData());
 }
 let saveTimer = 0;
