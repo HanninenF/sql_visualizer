@@ -134,13 +134,17 @@ function bestSpot(t, placed, dims, edges, anchor = null) {
 // up or down so an FK row lines up with its PK row (straight arrows). Gaps grow with the
 // number of arrows passing through. Finally neighbouring tables in a column are swapped
 // while that gives fewer jumps in the arrows as actually drawn.
-const AUTO = { COL_GAP: 90, ROW_GAP: 50, LANE: 16, COMP_GAP: 120, POLISH_MS: 400 };
+const AUTO = { COL_GAP: 90, ROW_GAP: 50, LANE: 16, COMP_GAP: 120, POLISH_ROUNDS: 3 };
+const compareLayoutNames = (a, b) => a === b ? 0 : a < b ? -1 : 1;
 
 function arrangeAll(tables, dims) {
   if (!tables.length) return;
   const edges = layoutEdges(tables);
   const old = tables.map(t => pos[t.name]).filter(Boolean);
-  if (state.dataView) return moveTo(packTight(tables, dims), old);
+  if (state.dataView) {
+    const reference = Object.keys(savedPos ?? {}).length ? savedPos : schemaPos;
+    return moveTo(preserveDataOrder(tables, dims, reference), old);
+  }
 
   // connected groups of tables, each laid out on its own; single tables go in a row below
   const nbrs = new Map(tables.map(t => [t, new Set()]));
@@ -157,9 +161,8 @@ function arrangeAll(tables, dims) {
     }
     groups.push(g);
   }
-  const deadline = performance.now() + AUTO.POLISH_MS;
   const blocks = groups.filter(g => g.length > 1).sort((a, b) => b.length - a.length)
-    .map(g => layoutGroup(g, dims, edges.filter(e => g.includes(e.from)), deadline));
+    .map(g => layoutGroup(g, dims, edges.filter(e => g.includes(e.from))));
   const singles = groups.filter(g => g.length === 1).map(g => g[0]);
 
   // blocks side by side, single tables in rows underneath
@@ -183,6 +186,52 @@ function arrangeAll(tables, dims) {
   moveTo(placed, old);
 }
 
+// Data cards should resemble the schema layout. Rebuild the schema's horizontal
+// columns, then stack cards compactly inside each column. This keeps the visual
+// structure of the FK diagram without preserving its large empty spaces.
+function preserveDataOrder(tables, dims, reference) {
+  const anchored = tables.filter(t => {
+    const p = reference?.[t.name];
+    return p && Number.isFinite(p.x) && Number.isFinite(p.y);
+  });
+  if (!anchored.length) return packTight(tables, dims);
+  const placed = new Map();
+  const gapX = 36, gapY = 28, columnThreshold = 80;
+  const anchoredOrder = [...anchored].sort((a, b) => {
+    const pa = reference[a.name], pb = reference[b.name];
+    return pa.x - pb.x || pa.y - pb.y || compareLayoutNames(a.name, b.name);
+  });
+  const columns = [];
+  for (const t of anchoredOrder) {
+    const p = reference[t.name];
+    const column = columns.at(-1);
+    if (!column || p.x - column.maxX > columnThreshold) {
+      columns.push({ maxX: p.x, tables: [t], width: 0 });
+    } else {
+      column.maxX = Math.max(column.maxX, p.x);
+      column.tables.push(t);
+    }
+  }
+  let x = 0;
+  for (const column of columns) {
+    column.tables.sort((a, b) => reference[a.name].y - reference[b.name].y || compareLayoutNames(a.name, b.name));
+    let y = 0;
+    for (const t of column.tables) {
+      const { w, h } = dims.get(t);
+      placed.set(t, { x, y, w, h });
+      y += h + gapY;
+      column.width = Math.max(column.width, w);
+    }
+    x += column.width + gapX;
+  }
+  for (const t of tables) if (!placed.has(t)) {
+    const { w, h } = dims.get(t);
+    placed.set(t, { x, y: 0, w, h });
+    x += w + gapX;
+  }
+  return placed;
+}
+
 // Keep the diagram where it was on the canvas; a brand new one goes in the middle of the view
 function moveTo(placed, old) {
   const bb = bboxOf([...placed.values()]), mid = viewCenter();
@@ -196,7 +245,15 @@ function moveTo(placed, old) {
 // tallest first, each at the highest free spot (then leftmost) within a width, trying
 // several widths and keeping the block closest to the canvas shape
 function packTight(tables, dims) {
-  const order = [...tables].sort((a, b) => dims.get(b).h - dims.get(a).h);
+  // Data cards are larger than schema cards. Pack them tightly, but preserve
+  // the user's normal canvas order instead of sorting by card height.
+  const order = [...tables].sort((a, b) => {
+    const pa = pos[a.name], pb = pos[b.name];
+    if (!pa && !pb) return compareLayoutNames(a.name, b.name);
+    if (!pa) return 1;
+    if (!pb) return -1;
+    return pa.x - pb.x || pa.y - pb.y || compareLayoutNames(a.name, b.name);
+  });
   const aspect = canvasAspect(), widest = Math.max(...order.map(t => dims.get(t).w));
   const total = order.reduce((sum, t) => sum + (dims.get(t).w + AUTO.COL_GAP) * (dims.get(t).h + AUTO.ROW_GAP), 0);
   let best = null;
@@ -222,7 +279,7 @@ function packTight(tables, dims) {
 }
 
 // Lay out one connected group. Returns { placed: Map table → rect, w, h }.
-function layoutGroup(nodes, dims, edges, deadline) {
+function layoutGroup(nodes, dims, edges) {
   // parents: the tables t points to. Cycles (A → B → A) are broken for the column choice.
   const parents = new Map(nodes.map(t => [t, new Set()])), children = new Map(nodes.map(t => [t, new Set()]));
   const mark = new Map();
@@ -324,7 +381,7 @@ function layoutGroup(nodes, dims, edges, deadline) {
       reindex();
       return false;
     };
-    for (let round = 0; round < 3 && performance.now() < deadline; round++) {
+    for (let round = 0; round < AUTO.POLISH_ROUNDS; round++) {
       let better = false;
       for (const t of lookups) {
         const [child] = referrers(t);
@@ -333,7 +390,6 @@ function layoutGroup(nodes, dims, edges, deadline) {
         const rivals = edges.some(e => e.from === child && e.to !== t && colOf(e.to) === colOf(t) && !lookups.includes(e.to));
         if (!rivals) continue;
         for (const below of [false, true]) {
-          if (performance.now() >= deadline) break;
           const moved = attempt(() => {
             cols[colOf(t)].splice(cols[colOf(t)].indexOf(t), 1);
             const col = cols[colOf(child)];
@@ -343,7 +399,7 @@ function layoutGroup(nodes, dims, edges, deadline) {
         }
       }
       for (let c = 0; c < cols.length; c++) {
-        for (let i = 0; i + 1 < cols[c].length && performance.now() < deadline; i++) {
+        for (let i = 0; i + 1 < cols[c].length; i++) {
           if (attempt(() => { const col = cols[c]; [col[i], col[i + 1]] = [col[i + 1], col[i]]; })) better = true;
         }
       }

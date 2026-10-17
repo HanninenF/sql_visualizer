@@ -36,7 +36,12 @@
   }
 
   async function request(path, options) {
-    const response = await fetch(path, { cache: 'no-store', ...options });
+    const requestOptions = { cache: 'no-store', ...options };
+    // A final save can be started from pagehide/visibilitychange. keepalive
+    // lets the browser finish that small SQLite snapshot while a reload is
+    // already in progress instead of restoring the previous layout.
+    if (options?.method === 'PUT') requestOptions.keepalive = true;
+    const response = await fetch(path, requestOptions);
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || `Storage request failed (${response.status})`);
     return body;

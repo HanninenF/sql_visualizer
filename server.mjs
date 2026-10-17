@@ -125,6 +125,16 @@ function hasChanged(base, other, key) {
   return baseHas !== otherHas || base[key] !== other[key];
 }
 
+function documentLayoutVersion(value) {
+  if (!value || !value.startsWith('{')) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return Number.isInteger(parsed.dataLayoutVersion) ? parsed.dataLayoutVersion : null;
+  } catch {
+    return null;
+  }
+}
+
 function mergeSnapshots(base, next, latest) {
   const merged = { ...latest };
   const conflicts = [];
@@ -135,6 +145,25 @@ function mergeSnapshots(base, next, latest) {
     const versionsDiffer = hasChanged(next, latest, key);
     if (changedByUs && changedByOther && versionsDiffer) conflicts.push(key);
     if (!changedByUs) continue;
+    // An older open browser tab must not overwrite a newer layout algorithm's
+    // document snapshot after a reload. New clients can still update an older
+    // snapshot, but an old client may only update non-layout keys through the
+    // normal merge path.
+    if (key.startsWith('sqlviz.doc.')) {
+      // A concurrent client may have the same layout version but an older
+      // snapshot. Preserve the latest complete document instead of allowing
+      // that client to resurrect stale table positions after a reload.
+      if (changedByOther && versionsDiffer) {
+        conflicts.push(key);
+        continue;
+      }
+      const nextVersion = documentLayoutVersion(next[key]);
+      const latestVersion = documentLayoutVersion(latest[key]);
+      if (nextVersion !== null && latestVersion !== null && nextVersion < latestVersion) {
+        conflicts.push(key);
+        continue;
+      }
+    }
     if (Object.prototype.hasOwnProperty.call(next, key)) merged[key] = next[key];
     else delete merged[key];
   }
@@ -252,7 +281,11 @@ async function handleStatic(request, response, pathname) {
   try {
     const stat = await fs.promises.stat(filePath);
     if (!stat.isFile()) throw new Error('Not a file');
-    response.writeHead(200, { 'Content-Type': MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream' });
+    response.writeHead(200, {
+      'Content-Type': MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      Pragma: 'no-cache',
+    });
     fs.createReadStream(filePath).pipe(response);
   } catch {
     sendJson(response, 404, { error: 'Not found' });

@@ -4,16 +4,41 @@
 
 const ta = $('#src'), hl = $('#hl'), gutter = $('#gutter');
 
-function hlTextLine(line) {
+function hlTextLine(line, st = {}, lineNumber = 0, dataLines, dataRowLines) {
   const hash = line.indexOf('#');
   const code = hash >= 0 ? line.slice(0, hash) : line;
   const com = hash >= 0 ? `<span class="h-com">${esc(line.slice(hash))}</span>` : '';
-  if (!code.trim()) return esc(code) + com;
-  if (!/^\s/.test(code)) return `<span class="h-tbl">${esc(code)}</span>` + com;
+  if (!code.trim()) {
+    st.inData = false;
+    return esc(code) + com;
+  }
+  if (/^\s*@data\s*$/i.test(code)) {
+    st.inData = true;
+    return `<span class="h-flag">${esc(code)}</span>` + com;
+  }
+  if (dataLines?.has(lineNumber)) {
+    if (dataRowLines?.has(lineNumber)) {
+      const m = code.match(/^(\s*\d+)(\s*,[\s\S]*)$/);
+      if (m) return `<span class="h-data-id">${esc(m[1])}</span><span class="h-data">${esc(m[2])}</span>` + com;
+    }
+    return `<span class="h-data">${esc(code)}</span>` + com;
+  }
+  if (st.inData && /^(\s*\d+)(\s*,[\s\S]*)$/.test(code)) {
+    const m = code.match(/^(\s*\d+)(\s*,[\s\S]*)$/);
+    return `<span class="h-data-id">${esc(m[1])}</span><span class="h-data">${esc(m[2])}</span>` + com;
+  }
+  if (st.inData && (/^\s/.test(code) || code.includes(',') || /^\d{1,3}:\d{2}(?::\d{2})?$/.test(code.trim())))
+    return `<span class="h-data">${esc(code)}</span>` + com;
+  if (st.inData) st.inData = false;
+  if (!/^\s/.test(code)) {
+    const cls = RESERVED.has(code.trim().toUpperCase()) ? 'h-reserved' : 'h-tbl';
+    return `<span class="${cls}">${esc(code)}</span>` + com;
+  }
   const ai = code.indexOf('->');
   const left = ai >= 0 ? code.slice(0, ai) : code;
   const m = left.match(/^(\s*)(\S*)([\s\S]*)$/);
-  let h = esc(m[1]) + `<span class="h-col">${esc(m[2])}</span>`;
+  const colCls = RESERVED.has(m[2].toUpperCase()) ? 'h-reserved' : 'h-col';
+  let h = esc(m[1]) + `<span class="${colCls}">${esc(m[2])}</span>`;
   h += m[3].split(/(\s+)/).map(p =>
     !p.trim() ? esc(p) : FLAG.test(p) ? `<span class="h-flag">${esc(p)}</span>` : `<span class="h-type">${esc(p)}</span>`).join('');
   if (ai >= 0) h += `<span class="h-arrow">-&gt;</span><span class="h-ref">${esc(code.slice(ai + 2))}</span>`;
@@ -22,7 +47,47 @@ function hlTextLine(line) {
 
 const SQL_KW = new Set(`CREATE TABLE INSERT INTO VALUES PRIMARY KEY FOREIGN REFERENCES NOT NULL AUTO_INCREMENT UNIQUE DROP IF EXISTS SET
 ALTER ADD CONSTRAINT DEFAULT INDEX ON DELETE UPDATE CASCADE COLUMN ENGINE CHARSET COLLATE CHECK`.split(/\s+/));
+const SQL_NAME_SUGGESTIONS = {
+  RELEASE: ['Edition', 'Album', 'Record', 'Pressing', 'Version'],
+};
 const SQL_TYPES = /^(TINYINT|SMALLINT|MEDIUMINT|INT|INTEGER|BIGINT|DECIMAL|NUMERIC|FLOAT|DOUBLE|BIT|BOOL|BOOLEAN|CHAR|VARCHAR|TEXT|TINYTEXT|MEDIUMTEXT|LONGTEXT|BLOB|DATE|DATETIME|TIMESTAMP|TIME|YEAR|ENUM|SET|JSON|UNSIGNED)$/i;
+
+function reservedIdentifierAtCaret() {
+  if (state?.mode && state.mode !== 'text') return null;
+  const at = ta.selectionStart;
+  const lineStart = ta.value.lastIndexOf('\n', Math.max(0, at - 1)) + 1;
+  const nextBreak = ta.value.indexOf('\n', at);
+  const lineEnd = nextBreak < 0 ? ta.value.length : nextBreak;
+  const code = ta.value.slice(lineStart, lineEnd).split('#', 1)[0];
+  const match = code.match(/^(\s*)(\S+)/);
+  if (!match) return null;
+  const name = match[2];
+  if (!RESERVED.has(name.toUpperCase()) || !SQL_NAME_SUGGESTIONS[name.toUpperCase()]) return null;
+  const start = lineStart + match[1].length;
+  const end = start + name.length;
+  if (at < start || at > end) return null;
+  return { name, start, end, suggestions: SQL_NAME_SUGGESTIONS[name.toUpperCase()] };
+}
+
+function updateIdentifierHint() {
+  const hint = $('#identifierHint');
+  const match = reservedIdentifierAtCaret();
+  if (!match) { hint.hidden = true; hint.replaceChildren(); return; }
+  hint.innerHTML = `<p><code>${esc(match.name)}</code> is a SQL keyword. Did you mean one of these?</p>` +
+    `<div class="hint-options">${match.suggestions.map(s => `<button type="button" data-name="${esc(s)}">${esc(s)}</button>`).join('')}</div>`;
+  hint.hidden = false;
+  hint.querySelectorAll('button').forEach(button => button.onclick = () => {
+    const current = reservedIdentifierAtCaret();
+    if (!current) return;
+    ta.setSelectionRange(current.start, current.end);
+    ta.setRangeText(button.dataset.name, current.start, current.end, 'end');
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    ta.focus();
+  });
+}
+
+ta.addEventListener('keyup', updateIdentifierHint);
+ta.addEventListener('click', updateIdentifierHint);
 // st carries a /* comment */ that is still open over to the next line
 function hlSqlLine(line, st = {}) {
   let out = '', last = 0;
@@ -49,7 +114,7 @@ function hlSqlLine(line, st = {}) {
   return out + esc(line.slice(last));
 }
 
-function decorateEditor(problems) {
+function decorateEditor(problems, parsed = {}) {
   const byLine = new Map();
   for (const p of problems) {
     const prev = byLine.get(p.line);
@@ -60,7 +125,7 @@ function decorateEditor(problems) {
   // one block per line, so a wrapped line's real height can be measured
   hl.innerHTML = lines.map((l, i) => {
     const p = byLine.get(i + 1);
-    const h = hlLine(l, hlState);
+    const h = hlLine(l, hlState, i + 1, parsed.dataLines, parsed.dataRowLines);
     if (!p || !l.trim()) return `<div>${h || '<br>'}</div>`;
     const lead = l.match(/^\s*/)[0];
     return `<div>${lead}<span class="h-${p.level}">${h.slice(lead.length)}</span></div>`;
@@ -163,11 +228,13 @@ ta.addEventListener('paste', () => {
   setTimeout(() => { pastedAll = false; }); // a paste that inserted nothing has no input event
 });
 ta.addEventListener('input', () => {
+  clearImmutableLayout();
   histTyping();
   if (state.mode === 'text') { state.text = ta.value; state.sqlStale = true; }
   else { state.sql = ta.value; state.textStale = true; }
   update();
-  if (pastedAll) { pastedAll = false; posBeforeData = null; autoLayout(); fit(); }
+  updateIdentifierHint();
+  if (pastedAll) { pastedAll = false; dataPos = null; autoLayout(); fit(); }
   saveState();
 });
 
@@ -175,10 +242,11 @@ ta.addEventListener('input', () => {
 
 // Everything is saved in the browser's localStorage:
 //   sqlviz.settings   preferences shared by all tabs (theme, text size, notation, editor width)
-//   sqlviz.docs       the tabs: { list: [{ id, name }], active }
+//   sqlviz.docs       the tabs: { list: [{ id, name }], active, closed: [{ id, name }] }
 //   sqlviz.doc.<id>   one diagram: text, SQL, mode, box positions and the view (pan/zoom)
 // `state` holds the preferences plus the active diagram's fields; `pos` its box positions.
 const SETTINGS = ['colors', 'fontSize', 'wrap', 'notation', 'implicit', 'keysOnly', 'dataView', 'panel', 'leftW'];
+const DATA_LAYOUT_VERSION = 13;
 // base: the text the diagram was created with (an example, or empty), to tell whether it has changed
 const DOC_DEFAULTS = { text: '', sql: '', mode: 'text', textStale: false, sqlStale: true, base: null };
 const SQLITE_DIRTY_KEY = 'sqlviz.meta.sqliteDirty';
@@ -193,14 +261,15 @@ if (!docs?.list?.length) {
   const old = store.get('state', null);
   const text = old?.text ?? EXAMPLES.school;
   const id = newDocId();
-  store.set(docKey(id), { ...DOC_DEFAULTS, ...(old && Object.fromEntries(Object.keys(DOC_DEFAULTS).filter(k => k in old).map(k => [k, old[k]]))), text, base: old ? null : text, pos: store.get('pos', {}) });
+  store.set(docKey(id), { ...DOC_DEFAULTS, ...(old && Object.fromEntries(Object.keys(DOC_DEFAULTS).filter(k => k in old).map(k => [k, old[k]]))), text, base: old ? null : text, pos: store.get('pos', {}), savedPos: {} });
   if (old) store.set('settings', Object.fromEntries(SETTINGS.filter(k => k in old).map(k => [k, old[k]])));
-  docs = { list: [{ id, name: docNameFrom(text) }], active: id };
+  docs = { list: [{ id, name: docNameFrom(text) }], active: id, closed: [] };
   store.set('docs', docs);
   store.remove('state');
   store.remove('pos');
 }
 if (!docs.list.some(d => d.id === docs.active)) docs.active = docs.list[0].id;
+if (!Array.isArray(docs.closed)) docs.closed = [];
 let persistedDocs = structuredClone(docs);
 const documentTransforms = [];
 const normalizeDocData = data => documentTransforms.reduce((d, transform) => transform(d), data);
@@ -228,7 +297,21 @@ function syncDocs(remote = store.get('docs', docs)) {
   for (const entry of remote.list) {
     if (!localIds.has(entry.id) && !base.has(entry.id)) merged.push(structuredClone(entry));
   }
+  const baseClosed = new Map((persistedDocs.closed ?? []).map(d => [d.id, d]));
+  const incomingClosed = new Map((remote.closed ?? []).map(d => [d.id, d]));
+  const localClosed = new Map((docs.closed ?? []).map(d => [d.id, d]));
+  const mergedIds = new Set(merged.map(d => d.id));
+  const closed = new Map();
+  for (const [id, entry] of localClosed) {
+    if (!mergedIds.has(id)) closed.set(id, structuredClone(entry));
+  }
+  for (const [id, entry] of incomingClosed) {
+    if (mergedIds.has(id)) continue;
+    const old = baseClosed.get(id), local = localClosed.get(id);
+    closed.set(id, local && old && !equal(local, old) ? structuredClone(local) : structuredClone(entry));
+  }
   docs.list.splice(0, docs.list.length, ...merged);
+  docs.closed = [...closed.values()];
   persistedDocs = structuredClone(remote);
 }
 window.addEventListener('storage', e => {
@@ -240,17 +323,170 @@ const state = Object.assign({
   colors: 'bleak', fontSize: 13, wrap: true, notation: 'arrows', implicit: false, keysOnly: false, dataView: false, panel: 'mid', leftW: null, ...DOC_DEFAULTS,
 }, store.get('settings', {}));
 let pos = {};
-let docView = null; // the active diagram's saved pan/zoom, if any
+let schemaPos = {};
+let dataPos = null;
+let dataLayoutSchemaFingerprint = null;
+let dataLayoutUserEdited = false;
+let savedPos = {};
+let docView = null; // legacy single pan/zoom value from older documents
+let schemaViewState = null;
+let dataViewState = null;
 let model = { tables: [] };
 let prevNames = null; // table names at the last draw (null: just loaded)
+const positionSnapshot = source => Object.fromEntries(Object.entries(source ?? {}).filter(([, p]) =>
+  Number.isFinite(p?.x) && Number.isFinite(p?.y)).map(([name, p]) => [name, { x: p.x, y: p.y }]));
+const positionFingerprint = source => JSON.stringify(Object.entries(positionSnapshot(source))
+  .sort(([a], [b]) => a === b ? 0 : a < b ? -1 : 1));
+// Kept outside the `sqlviz.` namespace so SQLite autosaves cannot overwrite it
+// during startup. It represents the last explicit data-layout snapshot.
+const IMMUTABLE_LAYOUT_PREFIX = 'sqlvizLayout.';
+const IMMUTABLE_LAYOUT_VERSION = 4;
+const immutableLayoutKey = id => `${IMMUTABLE_LAYOUT_PREFIX}${id}`;
+const layoutSource = value => value?.mode === 'sql' ? (value.sql ?? '') : (value?.text ?? '');
+function layoutSourceFingerprint(source) {
+  let hash = 2166136261;
+  for (let i = 0; i < source.length; i++) {
+    hash ^= source.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${hash >>> 0}:${source.length}`;
+}
+function readImmutableLayout(id) {
+  try {
+    const raw = localStorage.getItem(immutableLayoutKey(id));
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function clearImmutableLayout(id = docs.active) {
+  try { localStorage.removeItem(immutableLayoutKey(id)); } catch { /* best effort */ }
+}
+function writeImmutableLayout(id = docs.active) {
+  if (!id || !schemaPos || !dataPos) return false;
+  const snapshot = {
+    version: IMMUTABLE_LAYOUT_VERSION,
+    sourceFingerprint: layoutSourceFingerprint(layoutSource(state)),
+    fingerprint: positionFingerprint(schemaPos),
+    dataPos: positionSnapshot(dataPos),
+  };
+  try {
+    localStorage.setItem(immutableLayoutKey(id), JSON.stringify(snapshot));
+    return true;
+  } catch { return false; }
+}
 
 function readDoc(id) {
   const d = normalizeDocData(store.get(docKey(id), null) ?? {});
   for (const k of Object.keys(DOC_DEFAULTS)) state[k] = d[k] ?? DOC_DEFAULTS[k];
-  pos = d.pos ?? {};
+  // Positions are persisted data, so never trust their object shape. Older
+  // layout code wrote intermediate/prefix keys (R, Ra, Record...) and extra
+  // solver metadata. Keep only finite coordinates for exact table names.
+  const storedSchemaPos = positionSnapshot(d.pos);
+  savedPos = positionSnapshot(d.savedPos);
+  // A saved layout is the document's canonical starting layout after reload.
+  // Keep any positions that were added after the snapshot so newly added tables
+  // can still be placed without losing their last known position.
+  schemaPos = { ...storedSchemaPos };
+  for (const [name, point] of Object.entries(savedPos)) schemaPos[name] = { ...point };
+  dataPos = d.dataLayoutVersion === DATA_LAYOUT_VERSION
+    ? positionSnapshot(d.dataPos)
+    : null;
+  if (!Object.keys(dataPos ?? {}).length) dataPos = null;
+  dataLayoutSchemaFingerprint = d.dataLayoutSchemaFingerprint ?? null;
+  dataLayoutUserEdited = d.dataLayoutUserEdited === true;
+  if (dataPos && dataLayoutSchemaFingerprint !== positionFingerprint(schemaPos)) {
+    dataPos = null;
+    dataLayoutSchemaFingerprint = null;
+  }
+  const immutable = readImmutableLayout(id);
+  if (immutable?.version === IMMUTABLE_LAYOUT_VERSION &&
+      immutable.sourceFingerprint === layoutSourceFingerprint(layoutSource(d)) &&
+      immutable.fingerprint === positionFingerprint(schemaPos)) {
+    const cached = positionSnapshot(immutable.dataPos);
+    if (Object.keys(cached).length) {
+      dataPos = cached;
+      dataLayoutSchemaFingerprint = immutable.fingerprint;
+    }
+  }
+  // Data view has its own saved positions. Keep those across reloads instead
+  // of rebuilding the cards from the schema positions every time.
+  pos = state.dataView && dataPos ? dataPos : state.dataView ? {} : schemaPos;
+  if (typeof updateLayoutButtons === 'function') updateLayoutButtons();
   docView = d.view ?? null;
+  schemaViewState = d.schemaViewport ?? (!state.dataView ? docView : null);
+  dataViewState = d.dataViewport ?? (state.dataView ? docView : null);
 }
 readDoc(docs.active);
+
+function sanitizePositionsForModel() {
+  const names = new Set((model.tables ?? []).map(t => t.name));
+  const clean = value => Object.fromEntries(Object.entries(value ?? {})
+    .filter(([name, point]) => names.has(name) && Number.isFinite(point?.x) && Number.isFinite(point?.y))
+    .map(([name, point]) => [name, { x: point.x, y: point.y }]));
+  schemaPos = clean(schemaPos);
+  savedPos = clean(savedPos);
+  dataPos = dataPos ? clean(dataPos) : null;
+  pos = clean(pos);
+}
+
+function viewSnapshot() {
+  return { tx: view.tx, ty: view.ty, s: view.s };
+}
+function restoreViewSnapshot(snapshot) {
+  if (!snapshot || ![snapshot.tx, snapshot.ty, snapshot.s].every(Number.isFinite)) return false;
+  Object.assign(view, snapshot);
+  applyView();
+  return true;
+}
+
+function applySavedLayoutDefault() {
+  if (state.dataView || !Object.keys(savedPos).length) return;
+  for (const [name, point] of Object.entries(savedPos)) {
+    const clean = { x: point.x, y: point.y };
+    schemaPos[name] = clean;
+    pos[name] = { ...clean };
+  }
+  drawDiagram();
+}
+
+// A data layout is derived from the canonical saved schema layout. Rebuild it
+// when no current data snapshot exists so stale positions cannot override it.
+function applyDataLayoutDefault() {
+  if (!state.dataView || dataPos || !model.tables?.length) return false;
+  pos = {};
+  drawDiagram();
+  arrangeAll(model.tables, geometry.dims);
+  dataLayoutUserEdited = false;
+  dataPos = positionSnapshot(pos);
+  drawDiagram();
+  saveDoc();
+  return true;
+}
+
+function restoreStoredDataPositions() {
+  if (!state.dataView || !dataPos) return;
+  pos = structuredClone(dataPos);
+  drawDiagram();
+}
+
+function migrateStoredLayoutSnapshot(snapshot) {
+  const next = { ...snapshot };
+  let changed = false;
+  for (const [key, value] of Object.entries(next)) {
+    if (!key.startsWith('sqlviz.doc.')) continue;
+    try {
+      const doc = JSON.parse(value);
+      if (!doc || typeof doc !== 'object' || doc.dataLayoutVersion === DATA_LAYOUT_VERSION) continue;
+      // The old data positions were generated by a different algorithm. They
+      // must not be restored after a hard reload; the current build derives a
+      // fresh compact layout from the canonical schema positions.
+      doc.dataPos = null;
+      doc.dataLayoutVersion = DATA_LAYOUT_VERSION;
+      next[key] = JSON.stringify(doc);
+      changed = true;
+    } catch { /* malformed documents are handled by normal document recovery */ }
+  }
+  return { snapshot: next, changed };
+}
 
 // SQLite is authoritative once it has been initialized. A first run migrates
 // the existing localStorage snapshot; later runs restore SQLite's snapshot
@@ -258,6 +494,7 @@ readDoc(docs.active);
 window.sqliteStorageReady?.then(async storage => {
   const restoreFlag = 'sqlviz.sqliteRestorePending';
   if (!storage) {
+    sqliteReadyForWrites = true;
     setTimeout(() => toast('Disk storage is unavailable. Start the app with "npm start"; localStorage fallback is active.'), 0);
     return;
   }
@@ -267,20 +504,83 @@ window.sqliteStorageReady?.then(async storage => {
     if (dirtyToken && localStorage.getItem(SQLITE_DIRTY_KEY) === dirtyToken)
       localStorage.removeItem(SQLITE_DIRTY_KEY);
     sessionStorage.removeItem(restoreFlag);
+    enableSqliteWrites();
     return;
   }
-  // An existing SQLite snapshot is authoritative. A stale dirty flag can be
-  // left behind by an older browser cache and must not overwrite the durable
-  // database during startup. New edits are persisted through persist()/save().
-  localStorage.removeItem(SQLITE_DIRTY_KEY);
+  const storedLayoutMigration = migrateStoredLayoutSnapshot(storage.snapshot);
+  if (storedLayoutMigration.changed) {
+    reportSqliteConflicts(await storage.save(storedLayoutMigration.snapshot));
+  }
+  // A new origin (for example after moving from Live Server to another port)
+  // has an empty localStorage even though the shared SQLite file has all
+  // documents. Restore that cache before considering dirty/restore flags.
+  const localSnapshot = storage.localSnapshot();
+  let localDocs = null;
+  let sqliteDocs = null;
+  try { localDocs = JSON.parse(localSnapshot['sqlviz.docs'] ?? 'null'); } catch { /* ignore */ }
+  try { sqliteDocs = JSON.parse(storage.snapshot['sqlviz.docs'] ?? 'null'); } catch { /* ignore */ }
+  if (sqliteDocs?.list?.length && !localDocs?.list?.length) {
+    sessionStorage.removeItem(restoreFlag);
+    storage.replaceLocalSnapshot(storage.snapshot);
+    window.location.reload();
+    return;
+  }
+  const activeLocal = localDocs?.active ? localSnapshot[`sqlviz.doc.${localDocs.active}`] : null;
+  let localHasCurrentDocument = false;
+  try {
+    const localDoc = activeLocal ? JSON.parse(activeLocal) : null;
+    localHasCurrentDocument = localDoc?.dataLayoutVersion === DATA_LAYOUT_VERSION;
+  } catch { /* normal recovery below */ }
+  if (localDocs?.list?.length && localHasCurrentDocument) {
+    if (!storage.sameSnapshot(storage.snapshot, localSnapshot)) {
+      reportSqliteConflicts(await storage.save(localSnapshot));
+    }
+    sessionStorage.removeItem(restoreFlag);
+    enableSqliteWrites();
+    return;
+  }
+  // Once this origin has a current layout, prefer it over an older SQLite
+  // snapshot. This is important during a hard reload: the browser cache can
+  // contain the just-finished layout save while the durable request is still
+  // being reconciled with another client.
+  const activeLocalDoc = localDocs?.active ? localSnapshot[`sqlviz.doc.${localDocs.active}`] : null;
+  const activeStoredDoc = sqliteDocs?.active ? storage.snapshot[`sqlviz.doc.${sqliteDocs.active}`] : null;
+  try {
+    const localDoc = activeLocalDoc ? JSON.parse(activeLocalDoc) : null;
+    const storedDoc = activeStoredDoc ? JSON.parse(activeStoredDoc) : null;
+    if (localDoc?.dataLayoutVersion === DATA_LAYOUT_VERSION && localDoc.dataPos &&
+        storedDoc?.dataLayoutVersion === DATA_LAYOUT_VERSION &&
+        JSON.stringify(localDoc.dataPos) !== JSON.stringify(storedDoc.dataPos)) {
+      reportSqliteConflicts(await storage.save(localSnapshot));
+      sessionStorage.removeItem(restoreFlag);
+      enableSqliteWrites();
+      return;
+    }
+  } catch { /* malformed snapshots follow the normal recovery path */ }
+  // A dirty local snapshot represents an edit made before a reload. It must be
+  // uploaded before SQLite is considered for restoration; otherwise a reload
+  // can replace a freshly moved table with the previous durable layout.
+  const dirtyToken = localStorage.getItem(SQLITE_DIRTY_KEY);
+  if (dirtyToken) {
+    reportSqliteConflicts(await storage.save(storage.localSnapshot()));
+    if (localStorage.getItem(SQLITE_DIRTY_KEY) === dirtyToken)
+      localStorage.removeItem(SQLITE_DIRTY_KEY);
+    sessionStorage.removeItem(restoreFlag);
+    enableSqliteWrites();
+    return;
+  }
+  // With no unsynced local edit, SQLite is authoritative and can restore the
+  // browser cache when the two snapshots differ.
   if (storage.sameSnapshot(storage.snapshot, storage.localSnapshot())) {
     sessionStorage.removeItem(restoreFlag);
+    enableSqliteWrites();
     return;
   }
   if (sessionStorage.getItem(restoreFlag) === '1') {
     sessionStorage.removeItem(restoreFlag);
     toast('SQLite restore needs attention. The current browser cache was kept.');
     console.warn('SQLite and localStorage still differ after one restore; reload stopped.');
+    enableSqliteWrites();
     return;
   }
   sessionStorage.setItem(restoreFlag, '1');
@@ -288,6 +588,7 @@ window.sqliteStorageReady?.then(async storage => {
   window.location.reload();
 }).catch(error => {
   sessionStorage.removeItem('sqlviz.sqliteRestorePending');
+  sqliteReadyForWrites = true;
   console.warn('SQLite restore failed; keeping the current browser cache.', error);
   setTimeout(() => toast('SQLite restore failed. The current browser cache was kept.'), 0);
 });
@@ -298,6 +599,14 @@ let sqliteSaveTimer = 0;
 let sqliteSavePromise = Promise.resolve();
 let sqliteSaveWarned = false;
 let sqliteConflictWarned = false;
+let sqliteReadyForWrites = false;
+let sqliteWritePending = false;
+function enableSqliteWrites() {
+  sqliteReadyForWrites = true;
+  if (!sqliteWritePending) return;
+  sqliteWritePending = false;
+  queueSqliteSave();
+}
 function reportSqliteConflicts(conflicts = []) {
   if (!conflicts.length) return;
   console.warn('SQLite concurrent changes used last-writer-wins for:', conflicts);
@@ -336,6 +645,10 @@ function persist(key, value) {
   if (key === 'docs') syncDocs();
   if (store.set(key, value)) {
     if (key === 'docs') persistedDocs = structuredClone(docs);
+    if (!sqliteReadyForWrites) {
+      sqliteWritePending = true;
+      return;
+    }
     try { localStorage.setItem(SQLITE_DIRTY_KEY, `${Date.now()}-${Math.random()}`); } catch { /* SQLite remains best effort */ }
     queueSqliteSave();
     return;
@@ -346,11 +659,24 @@ function persist(key, value) {
 }
 function docData(id = docs.active) {
   if (id !== docs.active) return normalizeDocData({ ...DOC_DEFAULTS, pos: {}, ...store.get(docKey(id), {}) });
-  const d = { pos, view: { tx: view.tx, ty: view.ty, s: view.s } };
+  const d = { pos: state.dataView ? schemaPos : pos,
+  dataPos: state.dataView ? pos : dataPos,
+    dataLayoutVersion: DATA_LAYOUT_VERSION,
+    dataLayoutSchemaFingerprint: positionFingerprint(schemaPos),
+    dataLayoutUserEdited,
+    savedPos,
+    // Keep the old field for compatibility, but persist pan/zoom per view.
+    view: viewSnapshot(),
+    schemaViewport: state.dataView ? schemaViewState : viewSnapshot(),
+    dataViewport: state.dataView ? viewSnapshot() : dataViewState };
   for (const k of Object.keys(DOC_DEFAULTS)) d[k] = state[k];
   return normalizeDocData(d);
 }
-function saveDoc() { persist(docKey(docs.active), docData()); }
+function saveDoc() {
+  if (state.dataView) dataPos = positionSnapshot(pos);
+  else schemaPos = positionSnapshot(pos);
+  persist(docKey(docs.active), docData());
+}
 let saveTimer = 0;
 function saveNow() {
   clearTimeout(saveTimer);
@@ -362,17 +688,6 @@ function saveState() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveNow, 250);
 }
-// closing the tab within those 250 ms shouldn't lose the last keystrokes
-window.addEventListener('pagehide', () => {
-  if (saveTimer) saveNow();
-  flushSqliteSave();
-});
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'hidden') return;
-  if (saveTimer) saveNow();
-  flushSqliteSave();
-});
-
 function parseCurrent() {
   const r = state.mode === 'text' ? parseText(ta.value) : parseSQL(ta.value);
   r.problems.push(...resolve(r.tables, state.implicit));
@@ -382,7 +697,7 @@ function parseCurrent() {
 function update() {
   const r = parseCurrent();
   model = r;
-  decorateEditor(r.problems);
+  decorateEditor(r.problems, r);
   drawDiagram();
 }
 
@@ -417,6 +732,7 @@ function setMode(mode) {
   regenerate(mode);
   state.mode = mode;
   loadEditor();
+  updateIdentifierHint();
   histCommit();
   saveState();
 }
@@ -572,25 +888,53 @@ $('#keysBtn').onclick = () => {
 applyKeysOnly();
 
 // Data view: sample rows in every box, and an arrow from each foreign key value to its row.
-// The boxes grow, so the tables are spread out; turning it off puts them back where they were.
-let posBeforeData = null;
+// Schema and data views keep independent positions, so toggling does not discard manual moves.
 function applyDataView() {
   const b = $('#dataBtn');
   b.classList.toggle('on', state.dataView);
   b.setAttribute('aria-pressed', String(state.dataView));
 }
-$('#dataBtn').onclick = () => {
+$('#dataBtn').onclick = async () => {
+  // Store the viewport before changing mode. Positions and viewport are both
+  // mode-specific; toggling must not call fit() for an already-known view.
+  if (state.dataView) dataViewState = viewSnapshot();
+  else schemaViewState = viewSnapshot();
   state.dataView = !state.dataView;
   applyDataView();
-  // no positions to go back to (a new schema was pasted, or another tab): lay out again
-  let restored = false;
-  if (state.dataView) posBeforeData = { id: docs.active, pos: structuredClone(pos) };
-  else if (posBeforeData?.id === docs.active) { Object.assign(pos, posBeforeData.pos); saveDoc(); restored = true; }
-  if (!state.dataView) posBeforeData = null;
+  let laidOut = false;
+  if (state.dataView) {
+    schemaPos = positionSnapshot(pos);
+    if (dataPos) pos = structuredClone(dataPos);
+    else { dataPos = null; dataLayoutUserEdited = false; pos = {}; laidOut = true; }
+  } else {
+    dataPos = positionSnapshot(pos);
+    pos = structuredClone(schemaPos);
+  }
   drawDiagram();
-  if (state.dataView || !restored || boxesOverlap()) autoLayout();
-  fit();
-  saveState();
+  // A toggle must not reinterpret a user's manual positions as an error.
+  // Only the first data-view layout is generated automatically.
+  if (laidOut) {
+    // Use the same measured card widths on first creation and after reload.
+    // Otherwise fallback-font metrics can produce a different column packing.
+    await fontsLoaded;
+    autoLayout();
+    // This is the automatic first data layout, not a manual user edit.
+    dataLayoutUserEdited = false;
+    fit();
+    dataViewState = viewSnapshot();
+  } else {
+    const restored = restoreViewSnapshot(state.dataView ? dataViewState : schemaViewState);
+    if (!restored) {
+      fit();
+      if (state.dataView) dataViewState = viewSnapshot();
+      else schemaViewState = viewSnapshot();
+    }
+  }
+  // A view toggle changes the complete layout snapshot. Persist it immediately
+  // so an immediate browser reload cannot restore the previous data layout.
+  saveNow();
+  await flushSqliteSave();
+  writeImmutableLayout();
 };
 applyDataView();
 
@@ -809,13 +1153,29 @@ const fontsLoaded = Promise.all(Object.values(FONTS).map(f => document.fonts.loa
 Promise.race([fontsLoaded, new Promise(r => setTimeout(r, 1500))]).then(() => {
   widthCache.clear();
   loadEditor();
-  if (boxesOverlap()) autoLayout(); // saved positions from different box sizes
-  if (docView) { Object.assign(view, docView); applyView(); } else fit();
+  sanitizePositionsForModel();
+  // Apply after parsing as well: startup measurement may otherwise use the
+  // last working positions before the explicit snapshot is applied.
+  applySavedLayoutDefault();
+  applyDataLayoutDefault();
+  // An explicit layout snapshot is authoritative. Do not replace it with the
+  // automatic layout merely because cards changed size after a reload.
+  if (boxesOverlap() && !Object.keys(savedPos).length) autoLayout();
+  const restored = restoreViewSnapshot(state.dataView ? dataViewState : schemaViewState);
+  if (!restored) {
+    fit();
+    if (state.dataView) dataViewState = viewSnapshot();
+    else schemaViewState = viewSnapshot();
+  }
+  restoreStoredDataPositions();
 });
 // fonts that arrive late: measure again, and tidy up if the wider boxes now collide
 fontsLoaded.then(() => {
   widthCache.clear();
   if (!model.tables) return;
   drawDiagram();
-  if (boxesOverlap()) { autoLayout(); fit(); }
+  if (boxesOverlap() && !Object.keys(savedPos).length) { autoLayout(); fit(); }
+  applySavedLayoutDefault();
+  applyDataLayoutDefault();
+  restoreStoredDataPositions();
 });
